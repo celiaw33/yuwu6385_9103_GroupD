@@ -1,87 +1,127 @@
+// Click planets to highlight them; click empty space to emit fading ripples.
 class InputController {
   constructor() {
-    this.mode = "attract";
-    this.fieldRadius = 90;
-    this.strength = 55;
-    this.returnSpeed = 6;
-    this.maxCircles = 60; 
+    this.attractMode = true; // true = attract, false = repel
+    this.fieldRadius = 90 / 680; // Normalised radius: keep the current 90px reach; Bessie originally used 0.25.
+    this.strength = 0.08;        // Gravity strength as a fraction of the shorter canvas dimension.
+    this.easing = 0.08;          // Smaller values make following and returning slower.
+    this.rippleDuration = 1.2;   // Seconds before a click ripple disappears.
+    this.maxRipples = 20;        // Limit overlapping click feedback.
 
-    this.offsets = {};  
     this.pointer = { x: 0, y: 0, inside: false, pressed: false };
-    this.selectedId = "";
-    this.glowTime = 0;
+    this.offsets = {};       // Per-circle offsets; baseX/baseY remain unchanged.
+    this.clickRipples = [];  // Temporary feedback, separate from the planets.
+    this.glows = [];         // Clicked circles can glow independently.
   }
 
   update(dt, pointer) {
     this.pointer = pointer;
-    this.glowTime = Math.max(0, this.glowTime - dt);
+    for (let glow of this.glows) {
+      glow.life = Math.max(0, glow.life - dt);
+    }
+    let remainingRipples = [];
+    for (let ripple of this.clickRipples) {
+      ripple.age += dt;
+      if (ripple.age < this.rippleDuration) {
+        remainingRipples.push(ripple);
+      }
+    }
+    this.clickRipples = remainingRipples;
   }
 
-  getOffset(c, dt) {
+  // The main sketch calls getOffset; the gravity calculation keeps Bessie's method name.
+  getOffset(c, dt, drift) {
+    if (!drift) {
+      drift = { x: 0, y: 0 };
+    }
+    return this.applyGravity(c, dt, drift);
+  }
+
+  applyGravity(c, dt, drift) {
     if (!this.offsets[c.id]) {
       this.offsets[c.id] = { x: 0, y: 0 };
     }
     const offset = this.offsets[c.id];
+    const minDimension = min(width, height);
+    const circleX = c.baseX + drift.x;
+    const circleY = c.baseY + drift.y;
+    const d = dist(this.pointer.x, this.pointer.y, circleX, circleY);
+    const reach = this.fieldRadius * minDimension;
     let targetX = 0;
     let targetY = 0;
 
-    if (this.pointer.inside) {
-      const dx = this.pointer.x - c.baseX;
-      const dy = this.pointer.y - c.baseY;
-      const distance = dist(this.pointer.x, this.pointer.y, c.baseX, c.baseY);
+    if (this.pointer.inside && d < reach && d > 1) {
+      const closeness = 1 - d / reach;
+      // Normalise the shared radius for Bessie's mass calculation.
+      const sizeRatio = c.baseRadius / minDimension;
+      const weight = constrain(0.02 / sizeRatio, 0.1, 1);
+      let force = this.strength * minDimension * closeness * weight;
+      if (this.pointer.pressed) {
+        force = force * 1.8; // Keep the existing hold-to-strengthen interaction.
+      }
+      const directionX = (this.pointer.x - circleX) / d;
+      const directionY = (this.pointer.y - circleY) / d;
 
-      // distance > 0 
-      if (distance > 0 && distance < this.fieldRadius) {
-        const closeness = 1 - distance / this.fieldRadius;
-        // Heavy celestial bodies are less affected by gravity.
-        const weight = constrain(30 / c.baseRadius, 0.1, 1);
-        let force = this.strength * closeness * weight;
-        if (this.pointer.pressed) {
-          force = force * 1.8;
-        }
-        if (this.mode === "repel") {
-          force = -force;
-        }
-        targetX = dx / distance * force;
-        targetY = dy / distance * force;
+      if (this.attractMode) {
+        force = min(force, d * 0.8); // Prevent attraction from overshooting the cursor.
+        targetX = directionX * force;
+        targetY = directionY * force;
+      } else {
+        targetX = -directionX * force;
+        targetY = -directionY * force;
       }
     }
 
-    // No gravity: return to original place.
-    const easing = constrain(dt * this.returnSpeed, 0, 1);
-    offset.x = lerp(offset.x, targetX, easing);
-    offset.y = lerp(offset.y, targetY, easing);
+    // Match Bessie's easing at about 60fps and adjust for other frame rates using dt.
+    const step = constrain(this.easing * dt * 60, 0, 1);
+    offset.x = lerp(offset.x, targetX, step);
+    offset.y = lerp(offset.y, targetY, step);
     return offset;
   }
 
   getState(states, id) {
+    // Support both the current sketch's Map and plain objects.
     if (typeof states.get === "function") {
       return states.get(id);
     }
     return states[id];
   }
 
-  handleMousePressed(pointer, circleList, states, addCircle) {
+  handleMousePressed(pointer, circleList, states) {
     if (!pointer.inside) {
       return;
     }
-    // Start from the last drawn circle and select the one that appears at the top visually.
+    // Hit-test final positions and radii, starting with the last circle drawn.
     for (let i = circleList.length - 1; i >= 0; i--) {
       const c = circleList[i];
       const state = this.getState(states, c.id);
-      if (state && state.alpha > 15) {
-        const distance = dist(pointer.x, pointer.y, state.x, state.y);
-        if (distance <= state.radius) {
-          this.selectedId = c.id;
-          this.glowTime = 1;
-          return; // The circle has been selected. This time, no new addition will be made upon the click.
-        }
+      if (state && state.alpha > 15 &&
+          dist(pointer.x, pointer.y, state.x, state.y) <= state.radius) {
+        this.startGlow(c.id);
+        return;
       }
     }
-    if (circleList.length < this.maxCircles) {
-      // The "addCircle" function is initiated by the main program and will simultaneously register the new circle in the "Time" database.
-      addCircle(pointer.x, pointer.y);
+
+    // Empty space creates temporary feedback without changing the composition.
+    if (this.clickRipples.length < this.maxRipples) {
+      this.clickRipples.push({
+        x: pointer.x,
+        y: pointer.y,
+        age: 0,
+        radius: this.fieldRadius * min(width, height),
+        attractMode: this.attractMode
+      });
     }
+  }
+
+  startGlow(id) {
+    for (let glow of this.glows) {
+      if (glow.id === id) {
+        glow.life = 1;
+        return;
+      }
+    }
+    this.glows.push({ id: id, life: 1 });
   }
 
   handleMouseReleased() {
@@ -90,61 +130,88 @@ class InputController {
 
   handleKeyPressed(pressedKey, pressedCode) {
     if (pressedKey === " ") {
-      if (this.mode === "attract") {
-        this.mode = "repel";
+      this.attractMode = !this.attractMode;
+    }
+    if (pressedCode === UP_ARROW) {
+      this.strength = constrain(this.strength + 0.02, 0.02, 0.2);
+    }
+    if (pressedCode === DOWN_ARROW) {
+      this.strength = constrain(this.strength - 0.02, 0.02, 0.2);
+    }
+    if (pressedCode === RIGHT_ARROW) {
+      this.fieldRadius = constrain(this.fieldRadius + 0.05, 0.1, 0.5);
+    }
+    if (pressedCode === LEFT_ARROW) {
+      this.fieldRadius = constrain(this.fieldRadius - 0.05, 0.1, 0.5);
+    }
+  }
+
+  drawField(pointer, now) {
+    if (!pointer.inside) {
+      return;
+    }
+    const reach = this.fieldRadius * min(width, height);
+    let progress = (now % 1000) / 1000;
+    if (this.attractMode) {
+      progress = 1 - progress;
+    }
+    noFill();
+    strokeWeight(1);
+    for (let i = 0; i < 3; i++) {
+      const ringProgress = (progress + i / 3) % 1;
+      if (this.attractMode) {
+        stroke(170, 150, 255, 70 * (1 - ringProgress));
       } else {
-        this.mode = "attract";
+        stroke(255, 170, 120, 70 * (1 - ringProgress));
       }
+      circle(pointer.x, pointer.y, reach * 2 * ringProgress);
     }
-    if (pressedCode === 38) { // stronger
-      this.strength = constrain(this.strength + 5, 5, 120);
-    }
-    if (pressedCode === 40) { // weaker
-      this.strength = constrain(this.strength - 5, 5, 120);
-    }
-    if (pressedCode === 37) { // smaller
-      this.fieldRadius = constrain(this.fieldRadius - 10, 40, 350);
-    }
-    if (pressedCode === 39) { // larger
-      this.fieldRadius = constrain(this.fieldRadius + 10, 40, 350);
+    noStroke();
+    fill(255, 160);
+    circle(pointer.x, pointer.y, 8);
+  }
+
+  drawClickRipples() {
+    noFill();
+    strokeWeight(1.5);
+    for (let ripple of this.clickRipples) {
+      const progress = constrain(ripple.age / this.rippleDuration, 0, 1);
+      const radius = 8 + progress * ripple.radius;
+      const alpha = (1 - progress) * 180;
+      // Keep each ripple at its click position and preserve its original mode.
+      if (ripple.attractMode) {
+        stroke(170, 150, 255, alpha);
+      } else {
+        stroke(255, 170, 120, alpha);
+      }
+      circle(ripple.x, ripple.y, radius * 2);
+      circle(ripple.x, ripple.y, radius * 1.4);
     }
   }
 
   drawCursor(pointer, now) {
     push();
     colorMode(RGB, 255, 255, 255, 255);
-    let fieldColour = [130, 200, 255];
-    let modeLabel = "Attract";
-    if (this.mode === "repel") {
-      fieldColour = [245, 155, 180];
-      modeLabel = "Repel";
-    }
-
-    if (pointer.inside) {
-      noFill();
-      strokeWeight(1);
-      stroke(fieldColour[0], fieldColour[1], fieldColour[2], 65);
-      circle(pointer.x, pointer.y, this.fieldRadius * 2);
-      const pulse = 1 + Math.sin(now * 0.003) * 0.04;
-      circle(pointer.x, pointer.y, this.fieldRadius * 2 * pulse);
-    }
-
-    // renderStates represents the final display result updated by the main program in each frame.
-    // Here, read it. Let the click circle follow the Audio scaling and Perlin drift.
-    if (this.glowTime > 0) {
-      const state = this.getState(renderStates, this.selectedId);
-      if (state) {
+    this.drawField(pointer, now);
+    this.drawClickRipples();
+    // Glow follows the final render state and fades with the Time mechanic.
+    for (let glow of this.glows) {
+      const state = this.getState(renderStates, glow.id);
+      if (glow.life > 0 && state) {
         noFill();
         strokeWeight(2);
-        stroke(255, 235, 180, state.alpha * this.glowTime);
+        stroke(255, 235, 180, state.alpha * glow.life);
         circle(state.x, state.y, state.radius * 2 + 10);
       }
     }
-
+    let label = "Attract";
+    if (!this.attractMode) {
+      label = "Repel";
+    }
     noStroke();
     fill(200, 205, 220);
     textSize(12);
-    text(modeLabel + " | Space: switch | Arrows: strength/range | Hold: stronger | Click: glow/plant",
+    text(label + " | Space: switch | Arrows: strength/range | Hold: stronger | Click planet: glow | Empty space: ripple",
          16, height - 14);
     pop();
   }

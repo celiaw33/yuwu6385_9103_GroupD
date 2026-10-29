@@ -77,7 +77,7 @@ class TimeController {
       return 0;
     }
     const birth = timer.progress(this.now);
-    // 中心蓝色月牙首次淡入后保持可见，不参与交错淡出。
+    // Keep the central blue crescent visible after its initial fade-in.
     if (id === "main") {
       return birth;
     }

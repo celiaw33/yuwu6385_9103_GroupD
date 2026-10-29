@@ -10,7 +10,6 @@ let perlinController;
 let inputController;
 
 const renderStates = new Map();
-let nextPlantedId = 0;
 
 function setup() {
   createCanvas(DESIGN_WIDTH, DESIGN_HEIGHT);
@@ -53,7 +52,7 @@ function draw() {
   for (const c of circles) {
     const life = constrain(timeController?.getLife?.(c.id) ?? 1, 0, 1);
     const drift = perlinController?.getDrift?.(c, now) ?? { x: 0, y: 0 };
-    const offset = inputController?.getOffset?.(c, dt) ?? { x: 0, y: 0 };
+    const offset = inputController?.getOffset?.(c, dt, drift) ?? { x: 0, y: 0 };
     const audioScale = audioController?.getScale?.(c.baseRadius) ?? 1;
     const light = perlinController?.getLight?.(c, now) ?? 0;
     const sourceColour = timeController?.getColour?.(c, now) ?? c.baseColour;
@@ -146,23 +145,12 @@ function getPointer() {
   };
 }
 
-function addCircle(x, y) {
-  if (!perlinController?.createCircleAt) return;
-  const id = `planted-${nextPlantedId++}`;
-  const c = perlinController.createCircleAt(x, y, id);
-  if (!c) return;
-  c.id = id;
-  circles.push(c);
-  timeController?.registerCircle?.(id);
-  return c;
-}
-
 function mousePressed(event) {
   // Ignore clicks on buttons or other page elements.
   if (event?.target && event.target.tagName !== "CANVAS") return;
   const pointer = getPointer();
   if (!pointer.inside) return;
-  inputController?.handleMousePressed?.(pointer, circles, renderStates, addCircle);
+  inputController?.handleMousePressed?.(pointer, circles, renderStates);
 }
 
 function mouseReleased() {
