@@ -1,32 +1,3 @@
-/*
- * Perlin noise and randomness - Celia.
- * Shared module: no global circles[], setup(), draw(), or createCanvas().
- * sketch.js owns the canvas and combines all four mechanics.
- * RGB colours and alpha use 0-255. Positions use the 960 x 680 design space.
- * Developed with ChatGPT assistance; layout adapted from the original pilot.
- *
- * Course basis: Week 7 classes/objects; Week 8 random(), noise(), for-of,
- * arrays, and separate noise samples for x and y; Week 11 transformations.
- * Initial HSB palette was converted to RGB numbers, not reinterpreted as RGB.
- *
- * Additional references:
- * Reproducible layouts: randomSeed() and noiseSeed(). These set p5's shared
- * generators, so only makeComposition() sets them, never the drawing methods.
- * https://p5js.org/reference/p5/randomSeed/
- * https://p5js.org/reference/p5/noiseSeed/
- * Organic outlines: sample noise around a circular path and join vertices.
- * https://p5js.org/reference/p5/noise/
- * https://p5js.org/reference/p5/beginShape/
- * https://p5js.org/reference/p5/vertex/
- * https://p5js.org/reference/p5/endShape/
- * Time sampling and limiting values:
- * https://p5js.org/reference/p5/millis/
- * https://p5js.org/reference/p5/constrain/
- * RGB channels: https://p5js.org/reference/p5/red/
- * https://p5js.org/reference/p5/green/
- * https://p5js.org/reference/p5/blue/
- */
-
 class PerlinController {
   constructor() {
     this.activeSeed = floor(random(100000));

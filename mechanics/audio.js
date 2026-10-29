@@ -1,27 +1,4 @@
-/*
- * Audio mechanic - shared circles, RGB colours and alpha 0-255.
- * sketch.js owns setup(), draw(), circles[], and input events.
- * Keep the original preload and Galaxy.mp3 background track below unchanged.
- * load() connects to that song; it never loads a second music file.
- *
- * Course basis: Week 7 classes, Week 10 FFT/Amplitude/play-pause buttons,
- * Week 11 lerp() for smooth responses.
- * Size groups use base RADIUS: bass >=70, mid >=25, otherwise treble.
- * Band-only scale limits: 1.35 / 1.30 / 1.25; volume adds up to 0.03.
- * Thresholds, cooldown, and effect counts are project choices.
- *
- * References (the project bundles p5.sound 1.0.1; newer versions differ):
- * https://p5js.org/reference/p5.sound/p5.FFT/
- * https://p5js.org/reference/p5.sound/p5.Amplitude/
- * https://p5js.org/reference/p5/lerp/
- * https://p5js.org/reference/p5/createButton/
- * Extra: wait for browser audio activation before playing.
- * https://p5js.org/reference/p5/userStartAudio/
- * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function
- * Map adapter for the CURRENT sketch.js; plain objects are also supported.
- * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get
- */
-
+//audio: shared circles, RGB colours and alpha 0-255.
 let song;
 
 function preload(){
