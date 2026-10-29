@@ -1,11 +1,18 @@
-// Click planets to highlight them; click empty space to emit fading ripples.
+// Click planets to highlight them; click empty space to emit gravity waves.
+// The expanding outer ring supplies a temporary attraction or repulsion offset.
+// This is a visual interaction model, not a physical gravitational-wave simulation.
+// Reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Math/abs
 class InputController {
   constructor() {
     this.attractMode = true; // true = attract, false = repel
     this.fieldRadius = 90 / 680; // Normalised radius: keep the current 90px reach; Bessie originally used 0.25.
     this.strength = 0.08;        // Gravity strength as a fraction of the shorter canvas dimension.
     this.easing = 0.08;          // Smaller values make following and returning slower.
-    this.rippleDuration = 1.2;   // Seconds before a click ripple disappears.
+    this.rippleDuration = 1.8;   // Seconds before a click ripple disappears.
+    this.rippleReach = 3;        // Waves travel three times the hover-field radius.
+    this.waveWidth = 25;         // Soft band around the visible wavefront, in pixels.
+    this.waveBoost = 1.8;        // Scale the captured gravity strength for each wave.
+    this.maxWaveOffset = 80;     // Limit the combined displacement from many waves.
     this.maxRipples = 20;        // Limit overlapping click feedback.
 
     this.pointer = { x: 0, y: 0, inside: false, pressed: false };
@@ -49,12 +56,11 @@ class InputController {
     const reach = this.fieldRadius * minDimension;
     let targetX = 0;
     let targetY = 0;
+    const sizeRatio = c.baseRadius / minDimension;
+    const weight = constrain(0.02 / sizeRatio, 0.1, 1);
 
     if (this.pointer.inside && d < reach && d > 1) {
       const closeness = 1 - d / reach;
-      // Normalise the shared radius for Bessie's mass calculation.
-      const sizeRatio = c.baseRadius / minDimension;
-      const weight = constrain(0.02 / sizeRatio, 0.1, 1);
       let force = this.strength * minDimension * closeness * weight;
       if (this.pointer.pressed) {
         force = force * 1.8; // Keep the existing hold-to-strengthen interaction.
@@ -72,11 +78,53 @@ class InputController {
       }
     }
 
+    // Test the moving planet against each wavefront, then add its temporary pull.
+    const wave = this.getRippleOffset(circleX + offset.x, circleY + offset.y,
+                                      c.baseRadius, weight);
+    targetX += wave.x;
+    targetY += wave.y;
+
     // Match Bessie's easing at about 60fps and adjust for other frame rates using dt.
     const step = constrain(this.easing * dt * 60, 0, 1);
     offset.x = lerp(offset.x, targetX, step);
     offset.y = lerp(offset.y, targetY, step);
     return offset;
+  }
+
+  getRippleRadius(ripple) {
+    const progress = constrain(ripple.age / this.rippleDuration, 0, 1);
+    return 8 + progress * ripple.radius;
+  }
+
+  getRippleOffset(x, y, planetRadius, weight) {
+    let waveX = 0;
+    let waveY = 0;
+    for (let ripple of this.clickRipples) {
+      const distance = dist(x, y, ripple.x, ripple.y);
+      const radius = this.getRippleRadius(ripple);
+      // Include the planet's body so a wave can reach its edge before its centre.
+      const bandWidth = this.waveWidth + planetRadius;
+      const gap = Math.abs(distance - radius);
+      if (distance > 1 && gap < bandWidth) {
+        const closeness = 1 - gap / bandWidth;
+        const fade = 1 - ripple.age / this.rippleDuration;
+        let force = ripple.strength * closeness * fade * weight;
+        if (ripple.attractMode) {
+          force = min(force, distance * 0.8);
+        } else {
+          force = -force;
+        }
+        waveX += (ripple.x - x) / distance * force;
+        waveY += (ripple.y - y) / distance * force;
+      }
+    }
+    // Multiple clicks can overlap, but their combined movement stays bounded.
+    const total = dist(0, 0, waveX, waveY);
+    if (total > this.maxWaveOffset) {
+      waveX = waveX / total * this.maxWaveOffset;
+      waveY = waveY / total * this.maxWaveOffset;
+    }
+    return { x: waveX, y: waveY };
   }
 
   getState(states, id) {
@@ -102,13 +150,14 @@ class InputController {
       }
     }
 
-    // Empty space creates temporary feedback without changing the composition.
+    // Capture the mode and strength now; later key presses do not alter this wave.
     if (this.clickRipples.length < this.maxRipples) {
       this.clickRipples.push({
         x: pointer.x,
         y: pointer.y,
         age: 0,
-        radius: this.fieldRadius * min(width, height),
+        radius: this.fieldRadius * min(width, height) * this.rippleReach,
+        strength: this.strength * min(width, height) * this.waveBoost,
         attractMode: this.attractMode
       });
     }
@@ -176,7 +225,7 @@ class InputController {
     strokeWeight(1.5);
     for (let ripple of this.clickRipples) {
       const progress = constrain(ripple.age / this.rippleDuration, 0, 1);
-      const radius = 8 + progress * ripple.radius;
+      const radius = this.getRippleRadius(ripple);
       const alpha = (1 - progress) * 180;
       // Keep each ripple at its click position and preserve its original mode.
       if (ripple.attractMode) {
@@ -211,7 +260,7 @@ class InputController {
     noStroke();
     fill(200, 205, 220);
     textSize(12);
-    text(label + " | Space: switch | Arrows: strength/range | Hold: stronger | Click planet: glow | Empty space: ripple",
+    text(label + " | Space: switch | Arrows: strength/range | Hold: stronger | Click planet: glow | Empty space: gravity wave",
          16, height - 14);
     pop();
   }
