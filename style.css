@@ -1,8 +1,36 @@
+/*central the whole screen*/
 html, body {
   margin: 0;
   padding: 0;
+  background-color: #05050a;
+}
+
+body {
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* place in main */
+main {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 canvas {
   display: block;
+  width: min(calc(100vw - 32px), calc((100vh - 88px) * 960 / 680)) !important;
+  height: auto !important;
+}
+
+body > button {
+  margin: 0;
+  flex-shrink: 0;
 }
