@@ -1,7 +1,6 @@
 const DESIGN_WIDTH = 960;
 const DESIGN_HEIGHT = 680;
 const BACKGROUND_COLOUR = "#05050a";
-const AUDIO_PATH = "music.mp3";
 
 let circles = [];
 let audioController;
