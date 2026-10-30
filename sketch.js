@@ -33,7 +33,6 @@ function setup() {
   // Random chooses the initial layout; only this file owns the shared array.
   circles = perlinController?.makeComposition?.() ?? [];
   timeController?.reset?.(circles);
-  audioController?.load?.(AUDIO_PATH);
 }
 
 function draw() {
