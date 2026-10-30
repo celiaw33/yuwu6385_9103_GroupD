@@ -1,0 +1,313 @@
+// input-controls.js — User Input mechanic (Bessie)
+// This code was drafted with the help of Claude (Anthropic) and reviewed/edited by Bessie.
+//
+// The viewer's mouse becomes a gravity source inside Kandinsky's universe.
+// Circles near the mouse are pulled in (attract) or pushed away (repel),
+// and slowly return to their original place when the mouse moves away.
+// Bigger circles are "heavier" and move less — Kandinsky's idea of mass and position.
+
+class InputController {
+  constructor() {
+    // true = circles are pulled toward the mouse, false = circles are pushed away
+    // SPACE switches between the two (same boolean trick as the Week 7 tutorial)
+    this.attractMode = true;
+
+    // How far the gravity reaches, as a fraction of the canvas (normalised, like Week 8)
+    // LEFT / RIGHT arrows change this
+    this.fieldRadius = 0.25;
+
+    // How strong the gravity is, as a fraction of the canvas
+    // UP / DOWN arrows change this
+    this.strength = 0.08;
+
+    // How quickly a circle follows its target (0–1). Small = slow and smooth
+    this.easing = 0.08;
+  }
+
+  // Works out how far one circle should be moved by the mouse.
+  // It saves the result in the circle's offsetX and offsetY.
+  applyGravity(circle) {
+    let minDimension = min(width, height);
+
+    // the circle's real position on screen (normalised value × canvas size)
+    let circleX = circle.x * minDimension + originX;
+    let circleY = circle.y * minDimension + originY;
+
+    // distance between the circle and the mouse (dist() — Week 7 Part 5)
+    let d = dist(mouseX, mouseY, circleX, circleY);
+    let reach = this.fieldRadius * minDimension;
+
+    // by default the circle wants to go home (no offset)
+    let targetX = 0;
+    let targetY = 0;
+
+    if (d < reach && d > 1) {
+      // closer to the mouse = stronger pull (1 at the mouse, 0 at the edge of the field)
+      let closeness = 1 - d / reach;
+
+      // bigger circles are heavier, so they move less
+      let weight = constrain(0.02 / circle.size, 0.1, 1);
+
+      let force = this.strength * minDimension * closeness * weight;
+
+      // direction from the circle to the mouse, divided by d so its length is 1
+      let directionX = (mouseX - circleX) / d;
+      let directionY = (mouseY - circleY) / d;
+
+      if (this.attractMode) {
+        force = min(force, d * 0.8); // stop circles jumping past the mouse
+        targetX = directionX * force;
+        targetY = directionY * force;
+      } else {
+        targetX = -directionX * force; // minus = opposite direction = push away
+        targetY = -directionY * force;
+      }
+    }
+
+    // Easing: move a small part of the way to the target each frame.
+    // When the mouse leaves, target is 0 so the circle slowly drifts home.
+    circle.offsetX += (targetX - circle.offsetX) * this.easing;
+    circle.offsetY += (targetY - circle.offsetY) * this.easing;
+  }
+
+  // Called from mousePressed() in sketch.js
+  // Click on a circle = it glows. Click on empty space = plant a new circle.
+  handleMousePressed(circles) {
+    let minDimension = min(width, height);
+
+    for (let circle of circles) {
+      let circleX = circle.x * minDimension + originX + circle.offsetX;
+      let circleY = circle.y * minDimension + originY + circle.offsetY;
+      if (dist(mouseX, mouseY, circleX, circleY) < circle.size * minDimension) {
+        circle.glow = 1; // fades out in KandinskyCircle.display()
+        return;          // stop here, don't plant a new circle
+      }
+    }
+
+    // Turn the mouse position back into normalised values (0–1)
+    let newX = (mouseX - originX) / minDimension;
+    let newY = (mouseY - originY) / minDimension;
+    let palette = ['#f4d35e', '#ee9bc4', '#7ec8e3', '#e85d4a', '#a8d5a2', '#c9b8e8'];
+
+    // A planted circle starts at size 0 and grows in.
+    // Later it will be handed to the Time mechanic to begin its life cycle.
+    let newCircle = new KandinskyCircle(newX, newY, random(0.015, 0.04), random(palette));
+    newCircle.growth = 0;
+    newCircle.planted = true;
+    circles.push(newCircle);
+  }
+
+  // Called from keyPressed() in sketch.js (same arrow-key + constrain() structure as the random line tutorial)
+  handleKeyPressed() {
+    if (key == " ") {
+      this.attractMode = !this.attractMode; // flip true/false
+    }
+    if (keyCode === UP_ARROW) {
+      this.strength = constrain(this.strength + 0.02, 0.02, 0.2);
+    }
+    if (keyCode === DOWN_ARROW) {
+      this.strength = constrain(this.strength - 0.02, 0.02, 0.2);
+    }
+    if (keyCode === RIGHT_ARROW) {
+      this.fieldRadius = constrain(this.fieldRadius + 0.05, 0.1, 0.5);
+    }
+    if (keyCode === LEFT_ARROW) {
+      this.fieldRadius = constrain(this.fieldRadius - 0.05, 0.1, 0.5);
+    }
+  }
+
+  // Draws the gravity field as rings around the mouse.
+  // frameCount % 60 makes the rings loop every 60 frames (Week 8 Part 3).
+  drawField() {
+    let reach = this.fieldRadius * min(width, height);
+    let progress = (frameCount % 60) / 60; // goes 0 → 1, then back to 0
+
+    // attract = rings move inward, repel = rings move outward
+    if (this.attractMode) {
+      progress = 1 - progress;
+    }
+
+    push(); // keep these styles inside this function (Week 8 Part 2)
+    noFill();
+    for (let i = 0; i < 3; i++) {
+      let ringProgress = (progress + i / 3) % 1;
+      if (this.attractMode) {
+        stroke(170, 150, 255, 70 * (1 - ringProgress));
+      } else {
+        stroke(255, 170, 120, 70 * (1 - ringProgress));
+      }
+      circle(mouseX, mouseY, reach * 2 * ringProgress);
+    }
+    noStroke();
+    fill(255, 160);
+    circle(mouseX, mouseY, 8);
+    pop();
+  }
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>A Universe of Circles — User Input pilot</title>
+  <style>html,body{margin:0;padding:0;overflow:hidden;background:#101016}</style>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="input-controls.js"></script>
+  <script src="sketch.js"></script>
+</head>
+<body></body>
+</html>
+
+// sketch.js — pilot demo for the User Input mechanic (Bessie)
+// This code was drafted with the help of Claude (Anthropic) and reviewed/edited by Bessie.
+//
+// A simplified version of Kandinsky's "Several Circles" (1926).
+// Positions and sizes are normalised (0–1) like the Week 8 tutorial,
+// so the composition scales when the window is resized.
+
+let circles = [];        // all circles in the painting
+let inputController;     // my User Input mechanic
+let originX = 0;         // top-left corner of the square painting area
+let originY = 0;
+
+// Each circle: [x, y, size, colour]. Values are fractions of the painting size.
+let layout = [
+  [0.12, 0.19, 0.040, '#f2a6cf'], [0.10, 0.10, 0.020, '#f6e27a'],
+  [0.56, 0.22, 0.055, '#c7a6f0'], [0.73, 0.22, 0.035, '#f8e48a'],
+  [0.71, 0.31, 0.078, '#3f8f7f'], [0.825, 0.23, 0.020, '#f0a64a'],
+  [0.89, 0.15, 0.016, '#e23a4a'], [0.13, 0.56, 0.057, '#e6dcf2'],
+  [0.54, 0.42, 0.040, '#b9e6a8'], [0.51, 0.52, 0.046, '#d9a93a'],
+  [0.57, 0.51, 0.057, '#b8892e'], [0.61, 0.55, 0.025, '#f2a6cf'],
+  [0.43, 0.62, 0.040, '#c9c2ec'], [0.57, 0.63, 0.057, '#7ccbe8'],
+  [0.25, 0.58, 0.036, '#f1c34a'], [0.30, 0.61, 0.036, '#d9603a'],
+  [0.20, 0.66, 0.036, '#f8e48a'], [0.26, 0.67, 0.030, '#ee8fb5'],
+  [0.29, 0.68, 0.033, '#b2523a'], [0.83, 0.70, 0.090, '#e3dcef'],
+  [0.73, 0.68, 0.025, '#d8b48c'], [0.50, 0.77, 0.020, '#f1b43c'],
+  [0.77, 0.88, 0.017, '#e23a4a'], [0.88, 0.91, 0.014, '#4a8fe0'],
+  [0.19, 0.81, 0.025, '#5aa9e6'], [0.14, 0.78, 0.013, '#f2a6cf'],
+  [0.80, 0.82, 0.013, '#f6e27a'], [0.90, 0.51, 0.015, '#3a6fe0'],
+  [0.93, 0.71, 0.012, '#e0b040']
+];
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  calculateOrigin();
+
+  inputController = new InputController();
+
+  // the big blue circle with the black centre
+  let bigCircle = new KandinskyCircle(0.40, 0.34, 0.17, '#2f3fc4');
+  bigCircle.isMain = true;
+  circles.push(bigCircle);
+
+  // create the rest of the circles from the layout array
+  for (let i = 0; i < layout.length; i++) {
+    let c = layout[i];
+    circles.push(new KandinskyCircle(c[0], c[1], c[2], c[3]));
+  }
+}
+
+function draw() {
+  background(16, 16, 22);
+
+  // dark square for the painting area
+  noStroke();
+  fill(28, 30, 38);
+  let minDimension = min(width, height);
+  rect(originX, originY, minDimension, minDimension);
+
+  for (let circle of circles) {
+    inputController.applyGravity(circle); // User Input moves the circle
+    circle.display();
+  }
+
+  inputController.drawField();
+  drawInstructions();
+}
+
+function drawInstructions() {
+  fill(200);
+  noStroke();
+  textSize(12);
+  let modeText = "repel";
+  if (inputController.attractMode) {
+    modeText = "attract";
+  }
+  text(`mode: ${modeText}  ·  SPACE switch  ·  ↑↓ strength  ·  ←→ field size  ·  click: glow / plant`,
+       16, height - 16);
+}
+
+// The painting area is a square in the middle of the window
+function calculateOrigin() {
+  let minDimension = min(width, height);
+  originX = (width - minDimension) / 2;
+  originY = (height - minDimension) / 2;
+}
+
+function mousePressed() {
+  inputController.handleMousePressed(circles);
+}
+
+function keyPressed() {
+  inputController.handleKeyPressed();
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+  calculateOrigin();
+}
+
+// A shared circle class. In the final project this would live in its own file
+// and every mechanic would read or change its properties.
+class KandinskyCircle {
+  constructor(x, y, size, colour) {
+    this.x = x;             // normalised position (0–1)
+    this.y = y;
+    this.size = size;       // normalised radius
+    this.colour = colour;
+    this.offsetX = 0;       // set by the User Input mechanic (in pixels)
+    this.offsetY = 0;
+    this.glow = 0;          // 1 after a click, fades to 0
+    this.growth = 1;        // 0 → 1 for planted circles
+    this.isMain = false;
+  }
+
+  display() {
+    let minDimension = min(width, height);
+    let drawX = this.x * minDimension + originX + this.offsetX;
+    let drawY = this.y * minDimension + originY + this.offsetY;
+
+    // planted circles grow in
+    if (this.growth < 1) {
+      this.growth += 0.03;
+    }
+    let r = this.size * minDimension * this.growth;
+
+    push();
+    noStroke();
+
+    // glowing halo: a few see-through white circles around it
+    let halo = this.glow;
+    if (this.isMain) {
+      halo = 0.4;
+    }
+    for (let i = 1; i <= 4; i++) {
+      fill(255, 250, 235, 25 * halo);
+      circle(drawX, drawY, r * 2 * (1 + i * 0.07));
+    }
+    this.glow = this.glow * 0.94; // fade the click glow
+
+    // the circle itself, slightly see-through like the painting
+    let c = color(this.colour);
+    c.setAlpha(210);
+    fill(c);
+    circle(drawX, drawY, r * 2);
+
+    // the black centre of the big blue circle
+    if (this.isMain) {
+      fill(8, 8, 12);
+      circle(drawX - r * 0.08, drawY - r * 0.08, r * 1.6);
+    }
+    pop();
+  }
+}
