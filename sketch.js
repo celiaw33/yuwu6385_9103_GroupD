@@ -1,6 +1,8 @@
-/*
+// References:
+// https://p5js.org/reference/p5/millis/
+// https://p5js.org/reference/p5/deltaTime/
+// https://p5js.org/reference/p5/constrain/
 
-*/
 const DESIGN_WIDTH = 960;
 const DESIGN_HEIGHT = 680;
 const BACKGROUND_COLOUR = "#05050a";
@@ -23,106 +25,89 @@ function setup() {
   perlinController = new PerlinController();
   inputController = new InputController();
 
-  // Random chooses the initial layout; only this file owns the shared array.
-  circles = perlinController?.makeComposition?.() ?? [];
-  timeController?.reset?.(circles);
+  // Random chooses the initial layout(AI-assisted code)
+  circles = perlinController.makeComposition();
+  timeController.reset(circles);
+  audioController.load();
 }
 
 function draw() {
   background(BACKGROUND_COLOUR);
 
+  //time and mouse input(AI-assisted code)
   const now = millis();
   const dt = constrain(deltaTime / 1000, 0, 0.05);
   const pointer = getPointer();
 
-  timeController?.update?.(now);
-  audioController?.update?.(dt);
-  inputController?.update?.(dt, pointer);
+  timeController.update(now);
+  audioController.update(dt);
+  inputController.update(dt, pointer);
   renderStates = {};
 
   for (const c of circles) {
-    const life = constrain(timeController?.getLife?.(c.id) ?? 1, 0, 1);
-    const drift = perlinController?.getDrift?.(c, now) ?? { x: 0, y: 0 };
-    const offset = inputController?.getOffset?.(c, dt, drift) ?? { x: 0, y: 0 };
-    const audioScale = audioController?.getScale?.(c.baseRadius) ?? 1;
-    const light = perlinController?.getLight?.(c, now) ?? 0;
-    const sourceColour = timeController?.getColour?.(c, now) ?? c.baseColour;
-    const rgb = Array.isArray(sourceColour)
-      ? color(...sourceColour)
-      : color(sourceColour);
+    const life = constrain(timeController.getLife(c.id), 0, 1);//(AI-assisted code) for celestial life cycle. c.id is the unique ID assigned when Perlin creates the circle.
+    const drift = perlinController.getDrift(c, now); // Get this circle's Perlin drift at the current time.
+    const offset = inputController.getOffset(c, dt, drift); // Get this circle's offset from mouse gravity and click waves.
+    const audioScale = audioController.getScale(c.baseRadius); // Get the music-driven size multiplier.
+    const light = perlinController.getLight(c, now); // Get the subtle RGB brightness change.
+    const rgb = timeController.getColour(c, now); // Get the current colour from Time.
 
     const state = {
-      x: c.baseX + drift.x + offset.x,
-      y: c.baseY + drift.y + offset.y,
-      radius: c.baseRadius * audioScale,
-      alpha: constrain((c.baseAlpha ?? 255) * life, 0, 255),
-      colour: color(
-        constrain(red(rgb) + light, 0, 255),
-        constrain(green(rgb) + light, 0, 255),
-        constrain(blue(rgb) + light, 0, 255)
-      ),
-      halo: constrain(timeController?.getHalo?.(c.id, now) ?? 0, 0, 1),
-      life
+     x: c.baseX + drift.x + offset.x,
+     y: c.baseY + drift.y + offset.y,
+     radius: c.baseRadius * audioScale,
+     alpha: constrain(c.baseAlpha * life, 0, 255),
+     colour: color(
+     constrain(red(rgb) + light, 0, 255),
+     constrain(green(rgb) + light, 0, 255),
+     constrain(blue(rgb) + light, 0, 255)
+     ),
+    halo: constrain(timeController.getHalo(c.id, now), 0, 1),
+    life: life
     };
 
     renderStates[c.id] = state;
     drawCircle(c, state, now);
   }
 
-  // Effects receive final positions so they follow circles moved by gravity.
+  // Effects receive final positions so they follow circles moved by gravity.(AI-assisted code)
   push();
-  audioController?.drawEffects?.(renderStates, now, dt);
+  audioController.drawEffects(renderStates, now, dt);
   pop();
+
   push();
-  inputController?.drawCursor?.(pointer, now);
+  inputController.drawCursor(pointer, now);
   pop();
 }
 
 function drawCircle(c, state, now) {
-  if (state.alpha <= 0 || state.radius <= 0) return;
+  if (state.alpha <= 0 || state.radius <= 0) 
+    return;// Skip circles that are invisible or have no size.
 
   push();
-  colorMode(RGB, 255, 255, 255, 255);
   noStroke();
 
-  const paint = color(state.colour);
-
-  // Time owns halo strength; the final circle radius includes Audio's scale.
+  // Draw three translucent layers for a soft halo.
   for (let layer = 3; layer >= 1; layer--) {
-    paint.setAlpha(state.alpha * state.halo * 0.05);
-    fill(paint);
-    circle(state.x, state.y, state.radius * 2 * (1 + layer * 0.08));
+    fill(
+      red(state.colour),
+      green(state.colour),
+      blue(state.colour),
+      state.alpha * state.halo * 0.05
+    );
+
+    circle(
+      state.x,
+      state.y,
+      state.radius * 2 * (1 + layer * 0.08)
+    );
   }
 
   paint.setAlpha(state.alpha);
   fill(paint);
 
-  // A future Perlin renderer uses the supplied final position/radius/alpha.
-  // Until then, use a plain disc so the shared renderer is defined and usable.
-  push();
-  if (perlinController?.drawOrganicDisc) {
-    perlinController.drawOrganicDisc(c, state, now);
-  } else {
-    circle(state.x, state.y, state.radius * 2);
-  }
-  pop();
-
-  push();
-  perlinController?.drawPigmentClouds?.(c, state, now);
-  pop();
-
-  // Dark inner discs match the pilots' ring/crescent construction.
-  if (c.type === "ring" || c.type === "crescent") {
-    const inner = color(BACKGROUND_COLOUR);
-    inner.setAlpha(state.alpha);
-    fill(inner);
-    const ratio = c.holeRatio ?? (c.type === "ring" ? 0.8 : 0.75);
-    circle(
-      state.x + state.radius * (c.holeOffsetX ?? 0),
-      state.y + state.radius * (c.holeOffsetY ?? 0),
-      state.radius * 2 * ratio
-    );
-  }
+   perlinController.drawOrganicDisc(c, state, now);
+   perlinController.drawPigmentClouds(c, state, now);
 
   pop();
 }
@@ -131,32 +116,25 @@ function getPointer() {
   return {
     x: mouseX,
     y: mouseY,
-    inside: mouseX >= 0 && mouseX < width && mouseY >= 0 && mouseY < height,
+    inside: mouseX >= 0 && mouseX < width &&
+            mouseY >= 0 && mouseY < height,
     pressed: mouseIsPressed
   };
-}
+}//(AI-assisted code)
 
 function mousePressed(event) {
-  // Ignore clicks on buttons or other page elements.
-  if (event?.target && event.target.tagName !== "CANVAS") return;
+  // Ignore clicks on the music button or other page elements.(AI-assisted)
+  if (event && event.target && event.target.tagName !== "CANVAS") {
+    return;
+  }
+
   const pointer = getPointer();
-  if (!pointer.inside) return;
-  inputController?.handleMousePressed?.(pointer, circles, renderStates);
+
+  if (pointer.inside) {
+    inputController.handleMousePressed(pointer, circles, renderStates);
+  }
 }
 
 function mouseReleased() {
-  inputController?.handleMouseReleased?.(getPointer());
+  inputController.handleMouseReleased();
 }
-
-function keyPressed(event) {
-  // Do not intercept typing in page controls.
-  const target = event?.target;
-  if (target?.isContentEditable ||
-      ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target?.tagName)) return;
-  inputController?.handleKeyPressed?.(key, keyCode);
-  if (inputController && [32, 37, 38, 39, 40].includes(keyCode)) return false;
-}
-
-
-// Keep a fixed canvas for the first integration. A responsive canvas must also
-// convert mouse coordinates and all effects into this same design space
