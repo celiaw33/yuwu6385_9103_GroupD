@@ -1,11 +1,16 @@
 //audio: shared circles, RGB colours and alpha 0-255.
 let song;
 
+// Load the background music before the sketch starts.
+function preload(){
+  song = loadSound("assets/Galaxy.mp3");
+}
 function preload(){
   song = loadSound("assets/Galaxy.mp3");
 }
 
 class AudioController {
+  // Store the audio settings, frequency data and visual effects.
   constructor() {
     this.song = null;
     this.fft = null;
@@ -44,6 +49,7 @@ class AudioController {
     }
   }
 
+    // Let the user play or pause the music with a button.
   async togglePlayback() {
     if (!this.song || this.starting) {
       return;
@@ -69,6 +75,7 @@ class AudioController {
   }
 
   update(dt) {
+    // Smooth the audio values to avoid sudden changes in the circles.
     const seconds = constrain(dt, 0, 0.05);
     const smoothing = constrain(seconds * 8, 0, 1);
     let playing = false;
@@ -88,6 +95,8 @@ class AudioController {
       this.energy[band] = lerp(this.energy[band], targetEnergy, smoothing);
       this.cooldown[band] = Math.max(0, this.cooldown[band] - seconds);
       this.pulses[band] = false;
+
+// Detect sudden increases in sound energy to trigger ripple effects.
       const rise = targetEnergy - this.previousEnergy[band];
       if (playing && targetEnergy > 40 && rise > 14 && this.cooldown[band] === 0) {
         this.pulses[band] = true;
@@ -97,6 +106,7 @@ class AudioController {
     }
   }
 
+    // Large circles react to bass, medium to mid, and small to treble.
   getBand(baseRadius) {
     if (baseRadius >= 70) {
       return "bass";
@@ -107,6 +117,7 @@ class AudioController {
     return "treble";
   }
 
+    // Change the circle size based on the energy of its sound frequency.
   getScale(baseRadius) {
     const band = this.getBand(baseRadius);
     let amount = 0.25;
@@ -167,6 +178,7 @@ class AudioController {
     pop();
   }
 
+    // Draw expanding rings that slowly fade away over time.
   drawRipple(ripple, state) {
     const fade = 1 - ripple.age / ripple.lifetime;
     noFill();
@@ -179,6 +191,7 @@ class AudioController {
     }
   }
 
+    // Draw small dots orbiting the circles when the music gets louder.
   drawSatellites(c, state, band, now) {
     // Energy reveals satellites; pausing smoothly makes them disappear.
     const visibility = constrain((this.energy[band] - 70) / 185, 0, 1);
@@ -197,7 +210,7 @@ class AudioController {
     }
   }
 }
-
-
-
-
+//Chenyu Wang
+//cwan0059
+//540544219
+//assignment3
