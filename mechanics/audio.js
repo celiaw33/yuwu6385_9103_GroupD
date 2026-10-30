@@ -1,16 +1,15 @@
 //audio: shared circles, RGB colours and alpha 0-255.
+// Human-written: Set up and load the background music.
 let song;
 
 // Load the background music before the sketch starts.
 function preload(){
   song = loadSound("assets/Galaxy.mp3");
 }
-function preload(){
-  song = loadSound("assets/Galaxy.mp3");
-}
 
 class AudioController {
   // Store the audio settings, frequency data and visual effects.
+  // AI-assisted: Set up audio analysis and visual effect variables.
   constructor() {
     this.song = null;
     this.fft = null;
@@ -27,6 +26,7 @@ class AudioController {
     this.rippleLimit = 64;
   }
 
+  // AI-assisted: Set up FFT, amplitude and the music button.
   load() {
     // sketch.js currently passes AUDIO_PATH. Deliberately use the song from
     // preload instead: do not replace Galaxy.mp3 with that old music.mp3 path.
@@ -49,6 +49,8 @@ class AudioController {
     }
   }
 
+  // AI-assisted: I wrote the play/pause logic,
+// and AI helped with error handling.
     // Let the user play or pause the music with a button.
   async togglePlayback() {
     if (!this.song || this.starting) {
@@ -107,6 +109,7 @@ class AudioController {
   }
 
     // Large circles react to bass, medium to mid, and small to treble.
+  // Human-written: Match circle sizes to different sound frequencies.
   getBand(baseRadius) {
     if (baseRadius >= 70) {
       return "bass";
@@ -118,6 +121,7 @@ class AudioController {
   }
 
     // Change the circle size based on the energy of its sound frequency.
+  // Human-written: Change circle size based on audio energy.
   getScale(baseRadius) {
     const band = this.getBand(baseRadius);
     let amount = 0.25;
@@ -179,6 +183,7 @@ class AudioController {
   }
 
     // Draw expanding rings that slowly fade away over time.
+// Human-written: Draw expanding ripple rings.
   drawRipple(ripple, state) {
     const fade = 1 - ripple.age / ripple.lifetime;
     noFill();
@@ -192,6 +197,7 @@ class AudioController {
   }
 
     // Draw small dots orbiting the circles when the music gets louder.
+// AI-assisted: Animate small circles orbiting larger circles.
   drawSatellites(c, state, band, now) {
     // Energy reveals satellites; pausing smoothly makes them disappear.
     const visibility = constrain((this.energy[band] - 70) / 185, 0, 1);
