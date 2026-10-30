@@ -1,3 +1,6 @@
+/*
+
+*/
 const DESIGN_WIDTH = 960;
 const DESIGN_HEIGHT = 680;
 const BACKGROUND_COLOUR = "#05050a";
@@ -7,8 +10,7 @@ let audioController;
 let timeController;
 let perlinController;
 let inputController;
-
-const renderStates = new Map();
+let renderStates = {};
 
 function setup() {
   createCanvas(DESIGN_WIDTH, DESIGN_HEIGHT);
@@ -16,19 +18,10 @@ function setup() {
   colorMode(RGB, 255, 255, 255, 255);
   noStroke();
 
-  // typeof guards let the main sketch run before all four classes exist.
-  if (typeof AudioController !== "undefined") {
-    audioController = new AudioController();
-  }
-  if (typeof TimeController !== "undefined") {
-    timeController = new TimeController();
-  }
-  if (typeof PerlinController !== "undefined") {
-    perlinController = new PerlinController();
-  }
-  if (typeof InputController !== "undefined") {
-    inputController = new InputController();
-  }
+  audioController = new AudioController();
+  timeController = new TimeController();
+  perlinController = new PerlinController();
+  inputController = new InputController();
 
   // Random chooses the initial layout; only this file owns the shared array.
   circles = perlinController?.makeComposition?.() ?? [];
@@ -45,7 +38,7 @@ function draw() {
   timeController?.update?.(now);
   audioController?.update?.(dt);
   inputController?.update?.(dt, pointer);
-  renderStates.clear();
+  renderStates = {};
 
   for (const c of circles) {
     const life = constrain(timeController?.getLife?.(c.id) ?? 1, 0, 1);
@@ -72,7 +65,7 @@ function draw() {
       life
     };
 
-    renderStates.set(c.id, state);
+    renderStates[c.id] = state;
     drawCircle(c, state, now);
   }
 
