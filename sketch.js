@@ -103,9 +103,6 @@ function drawCircle(c, state, now) {
     );
   }
 
-  paint.setAlpha(state.alpha);
-  fill(paint);
-
    perlinController.drawOrganicDisc(c, state, now);
    perlinController.drawPigmentClouds(c, state, now);
 

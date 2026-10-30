@@ -62,6 +62,7 @@ class TimeController {
     this.now = millis();
     this.ids = [];          // every circle id Time knows about, in birth order
     this.cycleCount = 0;    // how many full cycles have finished
+    this.mainBirthTimer = null; // Preserve the central crescent's first fade-in.
     this.startCycle();
   }
 
@@ -70,6 +71,7 @@ class TimeController {
     this.circles = circles;
     this.ids = [];
     this.cycleCount = 0;
+    this.mainBirthTimer = null;
     this.startCycle();
   }
 
@@ -142,6 +144,10 @@ class TimeController {
   // Life of one circle: how fully present it is (0 = gone, 1 = full).
   computeLife(id, i, elapsed, phaseProgress) {
     const birth = this.birthLife(id);
+    // The central blue crescent does not pulse or fade with the global phases.
+    if (id === "main") {
+      return birth;
+    }
 
     if (this.currentPhase === 'BIRTH' || this.currentPhase === 'GROWTH') {
       return birth;
@@ -165,7 +171,10 @@ class TimeController {
 
   // 0 = not born, rising to 1 as the circle's own fade-in timer runs.
   birthLife(id) {
-    const timer = this.circleTimers[id];
+    let timer = this.circleTimers[id];
+    if (id === "main" && this.mainBirthTimer) {
+      timer = this.mainBirthTimer;
+    }
     if (!timer) {
       return 0;
     }
@@ -175,9 +184,16 @@ class TimeController {
   onBirth(index) {
     if (index >= this.ids.length) return;
     const id = this.ids[index];
+    // Reuse this timer across cycles so the crescent never becomes invisible again.
+    if (id === "main" && this.mainBirthTimer) {
+      this.circleTimers[id] = this.mainBirthTimer;
+    }
     // A circle planted by the viewer may already have its own timer; do not restart it.
     if (!this.circleTimers[id]) {
       this.circleTimers[id] = new Timer(this.growDuration, this.now);
+    }
+    if (id === "main") {
+      this.mainBirthTimer = this.circleTimers[id];
     }
     this.nextIndex = index + 1;
   }
@@ -231,12 +247,20 @@ class TimeController {
 
   // 0 to 1: use it for opacity.
   getLife(circleOrId) {
-    return this.lives[this.idOf(circleOrId)] ?? 0;
+    const id = this.idOf(circleOrId);
+    if (id === "main") {
+      return this.birthLife(id);
+    }
+    return this.lives[id] ?? 0;
   }
 
   // Cold grey-blue warms into the circle's own colour as it is born.
   // From the second cycle on, the whole palette is rotated by hueShiftPerCycle degrees.
   getColour(circle) {
+    // Preserve the crescent's original blue layers rather than rotating their hue.
+    if (circle.id === "main") {
+      return lerpColor(this.coldColour, color(circle.baseColour), this.birthLife(circle.id));
+    }
     let shifted = this.shiftCache[circle.id];
     if (!shifted) {
       shifted = this.shiftHue(color(circle.baseColour), this.cycleCount * this.hueShiftPerCycle);
