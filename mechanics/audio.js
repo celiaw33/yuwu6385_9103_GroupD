@@ -6,9 +6,6 @@ let song;
 function preload(){
   song = loadSound("assets/Galaxy.mp3");
 }
-function preload(){
-  song = loadSound("assets/Galaxy.mp3");
-}
 
 class AudioController {
   // Store the audio settings, frequency data and visual effects.
@@ -52,6 +49,8 @@ class AudioController {
     }
   }
 
+  // AI-assisted: I wrote the play/pause logic,
+// and AI helped with error handling.
     // Let the user play or pause the music with a button.
   async togglePlayback() {
     if (!this.song || this.starting) {
@@ -122,6 +121,7 @@ class AudioController {
   }
 
     // Change the circle size based on the energy of its sound frequency.
+  // Human-written: Change circle size based on audio energy.
   getScale(baseRadius) {
     const band = this.getBand(baseRadius);
     let amount = 0.25;
