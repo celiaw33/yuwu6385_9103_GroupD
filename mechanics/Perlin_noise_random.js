@@ -8,6 +8,7 @@ class PerlinController {
      this.edgeAmount = 3;
      this.edgeSpeed = 0.00048;
      this.lightAmount = 12;
+     this.textureOpacity = 0.025;
   }
 
   makeComposition() {
@@ -215,30 +216,37 @@ class PerlinController {
       pop();
     }
   }
-
+  
+// AI-assisted: overlap translucent patches to suggest pigment variation.
+// Reference: https://p5js.org/reference/p5/ellipse/
   drawClouds(state, seed, now) {
     const time = now * this.driftSpeed * 0.7;
     noStroke();
+
     for (let layer = 0; layer < 3; layer++) {
       const angle = noise(seed + layer * 17, 80, time) * Math.PI * 4;
       const distance = noise(seed + layer * 31, 170, time) * state.radius * 0.34;
       const patchRadius = (0.22 + noise(seed + layer * 47, 250, time) * 0.26) * state.radius;
+
       let change = 30;
+
       if (layer % 3 === 2) {
         change = -40;
       }
-      // Overlap translucent ellipses instead of using a browser blur filter.
+      fill(
+        constrain(red(state.colour) + change, 0, 255),
+        constrain(green(state.colour) + change, 0, 255),
+        constrain(blue(state.colour) + change, 0, 255),
+        state.alpha * this.textureOpacity
+      );
       for (let softLayer = 3; softLayer >= 1; softLayer--) {
-        fill(
-          constrain(red(state.colour) + change, 0, 255),
-          constrain(green(state.colour) + change, 0, 255),
-          constrain(blue(state.colour) + change, 0, 255),
-          state.alpha * 0.025
-        );
         const softScale = 1 + softLayer * 0.1;
-        ellipse(state.x + Math.cos(angle) * distance,
-                state.y + Math.sin(angle) * distance,
-                patchRadius * 2 * softScale, patchRadius * 1.35 * softScale);
+         ellipse(
+          x,
+          y,
+          patchRadius * 2 * softScale,
+          patchRadius * 1.35 * softScale
+         );
       }
     }
   }
