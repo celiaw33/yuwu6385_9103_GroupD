@@ -16,9 +16,6 @@ class PerlinController {
     noiseSeed(this.activeSeed);
     let result = [];
 
-    // Compound circles stay together when Audio scales or Input moves them.
-    // Each layer: local x/y offset, radius, RGB colour, alpha, edge amount,
-    // and whether it needs pigment shading.
     result.push(this.makeLayeredCircle("main", 320, 300, [
       { x: 0, y: 0, radius: 218, colour: [195, 250, 237], alpha: 194, edge: 10, clouds: false },
       { x: 0, y: 0, radius: 205, colour: [26, 72, 199], alpha: 242, edge: 7, clouds: false },
@@ -216,7 +213,7 @@ class PerlinController {
       pop();
     }
   }
-  
+
 // AI-assisted: overlap translucent patches to suggest pigment variation.
 // Reference: https://p5js.org/reference/p5/ellipse/
   drawClouds(state, seed, now) {
@@ -227,6 +224,9 @@ class PerlinController {
       const angle = noise(seed + layer * 17, 80, time) * Math.PI * 4;
       const distance = noise(seed + layer * 31, 170, time) * state.radius * 0.34;
       const patchRadius = (0.22 + noise(seed + layer * 47, 250, time) * 0.26) * state.radius;
+
+      const x = state.x + Math.cos(angle) * distance;
+      const y = state.y + Math.sin(angle) * distance;
 
       let change = 30;
 
