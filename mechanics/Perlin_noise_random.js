@@ -126,23 +126,6 @@ class PerlinController {
     return (noise(c.edgeSeed, 51, now * this.driftSpeed) * 2 - 1) * 12;
   }
 
-  createCircleAt(x, y, id) {
-    const paletteIndex = floor(random(this.palette.length));
-    const rgb = this.palette[paletteIndex];
-    return {
-      id: id,
-      baseX: x,
-      baseY: y,
-      baseRadius: random(12, 32),
-      baseColour: [rgb[0], rgb[1], rgb[2]],
-      baseAlpha: 220,
-      edgeSeed: random(1000),
-      edgeAmount: 3,
-      driftAmount: 3,
-      type: "disc"
-    };
-  }
-
   drawOrganicDisc(c, state, now) {
     push();
     colorMode(RGB, 255, 255, 255, 255);
