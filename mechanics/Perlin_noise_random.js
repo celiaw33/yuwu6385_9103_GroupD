@@ -102,7 +102,6 @@ class PerlinController {
       baseColour: layers[0].colour,
       baseAlpha: 255,
       edgeSeed: random(1000),
-      driftAmount: 0,
       type: "layered",
       layers: layers
     };
@@ -172,18 +171,37 @@ class PerlinController {
     pop();
   }
 
+// AI-assisted: build an organic circle by sampling noise around its edge.
+// References:
+// https://p5js.org/reference/p5/beginShape/
+// https://p5js.org/reference/p5/vertex/
+// https://p5js.org/reference/p5/endShape/
   drawDisc(state, seed, now, edgeAmount) {
     noStroke();
-    fill(red(state.colour), green(state.colour), blue(state.colour), state.alpha);
+    fill(
+      red(state.colour), green(state.colour), blue(state.colour), state.alpha
+    );
+    const time = now * this.edgeSpeed;
+
     beginShape();
+
     // Math.sin/cos explicitly use radians, independent of other modules.
     for (let angle = 0; angle < Math.PI * 2; angle += 0.045) {
-      const xSample = Math.cos(angle) * 1.15 + seed;
-      const ySample = Math.sin(angle) * 1.15 + seed;
-      const wobble = (noise(xSample, ySample, now * this.edgeSpeed) * 2 - 1) * edgeAmount;
+      const cosAngle = Math.cos(angle);
+      const sinAngle = Math.sin(angle)
+
+      const noiseValue = noise(
+        cosAngle * 1.15 + seed,
+        sinAngle * 1.15 + seed,
+        time
+      );
+  
+      const wobble = (noiseValue * 2 - 1) * edgeAmount;
       const radius = state.radius + wobble;
-      vertex(state.x + Math.cos(angle) * radius,
-             state.y + Math.sin(angle) * radius);
+
+      vertex(
+        state.x + cosAngle * radius,
+        state.y + sinAngle * radius);
     }
     endShape(CLOSE);
   }
