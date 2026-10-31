@@ -1,11 +1,13 @@
 class PerlinController {
   constructor() {
-    this.activeSeed = floor(random(100000));
-    this.driftSpeed = 0.00015;
-    this.edgeSpeed = 0.00048;
-    // A small RGB palette for circles planted later by the Input mechanic.
-    this.palette = [[159, 188, 230], [123, 205, 190], [228, 152, 174],
-                    [245, 208, 102], [194, 163, 237]];
+     this.activeSeed = floor(random(100000));
+
+     // AI-assisted: group the animation settings for parameter testing.
+     this.driftAmount = 3;
+     this.driftSpeed = 0.00015;
+     this.edgeAmount = 3;
+     this.edgeSpeed = 0.00048;
+     this.lightAmount = 12;
   }
 
   makeComposition() {
