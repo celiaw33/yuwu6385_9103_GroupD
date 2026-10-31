@@ -76,8 +76,6 @@ class PerlinController {
         ],
         baseAlpha: constrain(item.alpha + random(-18, 13), 0, 255),
         edgeSeed: random(1000),
-        edgeAmount: 3,
-        driftAmount: 3,
         type: "disc"
       });
     }
@@ -110,21 +108,31 @@ class PerlinController {
     };
   }
 
+  // AI-assisted: map smooth noise values to horizontal and vertical offsets.
   getDrift(c, now) {
-    const time = now * this.driftSpeed;
-    return {
-      x: (noise(c.edgeSeed, 201, time) * 2 - 1) * c.driftAmount,
-      y: (noise(c.edgeSeed, 401, time) * 2 - 1) * c.driftAmount
-    };
+  // Keep compound shapes fixed to anchor the composition.
+  if (c.type === "layered") {
+    return { x: 0, y: 0 };
   }
 
+  const time = now * this.driftSpeed;
+
+  return {
+    x: (noise(c.edgeSeed, 201, time) * 2 - 1) * this.driftAmount,
+    y: (noise(c.edgeSeed, 401, time) * 2 - 1) * this.driftAmount
+  };
+}
+
+  // AI-assisted: use smooth noise to vary the RGB brightness.
   getLight(c, now) {
-    // Keep the fixed composition's dark centres dark.
-    if (c.type === "layered") {
-      return 0;
-    }
-    return (noise(c.edgeSeed, 51, now * this.driftSpeed) * 2 - 1) * 12;
+  // Preserve the dark centres of compound shapes.
+  if (c.type === "layered") {
+    return 0;
   }
+
+  const time = now * this.driftSpeed;
+  return (noise(c.edgeSeed, 51, time) * 2 - 1) * this.lightAmount;
+}
 
   drawOrganicDisc(c, state, now) {
     push();
@@ -155,9 +163,11 @@ class PerlinController {
         }
       }
     } else {
-      // Audio scales both the body and its edge distortion.
-      const edge = c.edgeAmount * state.radius / c.baseRadius;
-      this.drawDisc(state, c.edgeSeed, now, edge);
+        // AI-assisted: scale the edge variation with the circle's displayed size.
+        const sizeScale = state.radius / c.baseRadius;
+        const edge = this.edgeAmount * sizeScale;
+
+        this.drawDisc(state, c.edgeSeed, now, edge);
     }
     pop();
   }
@@ -215,3 +225,6 @@ class PerlinController {
     }
   }
 }
+
+
+// Reference: https://p5js.org/reference/p5/noise/
