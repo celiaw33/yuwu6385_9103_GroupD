@@ -1,4 +1,22 @@
-//audio: shared circles, RGB colours and alpha 0-255.
+// =============================================================================
+// audio.js — Audio mechanic (Lunette / Chenyu Wang, cwan0059)
+// -----------------------------------------------------------------------------
+// Kandinsky believed colours have sounds. Here the music is split by FFT into
+// bass, mid and treble, and each band drives a different group of circles:
+//   large circles → bass, medium circles → mid, small circles → treble.
+// More energy in a band = the circles in that group swell. Sudden rises in a
+// band release fading ripples, and loud passages reveal small orbiting satellites.
+// The overall volume (p5.Amplitude) adds a subtle breathing to every circle.
+// Audio only changes SIZE (and draws its own effects); it never moves circles
+// or changes their colour.
+//
+// Each function below is labelled "Human-written" or "AI-assisted".
+// AI acknowledgement: AI assistance is listed in the README. In the final
+// integration round Claude (Anthropic) also helped to add the `activity` link
+// with the Time mechanic, the start() function for the intro screen, and comments
+// on techniques from outside the course. Reviewed and tested by Lunette.
+// =============================================================================
+
 // Human-written: Set up and load the background music.
 let song;
 
@@ -27,9 +45,9 @@ class AudioController {
   }
 
   // AI-assisted: Set up FFT, amplitude and the music button.
+  // p5.FFT splits the sound into frequencies; p5.Amplitude measures the overall volume.
+  // https://p5js.org/reference/p5.sound/p5.FFT/  ·  https://p5js.org/reference/p5.sound/p5.Amplitude/
   load() {
-    // sketch.js currently passes AUDIO_PATH. Deliberately use the song from
-    // preload instead: do not replace Galaxy.mp3 with that old music.mp3 path.
     if (!song || !song.isLoaded()) {
       console.warn("The background track from preload is not available.");
       return;
@@ -49,9 +67,21 @@ class AudioController {
     }
   }
 
-  // AI-assisted: I wrote the play/pause logic,
-// and AI helped with error handling.
-    // Let the user play or pause the music with a button.
+  // Starts the music if it is not already playing (called by the intro screen in sketch.js).
+  start() {
+    if (this.song && !this.song.isPlaying()) {
+      this.togglePlayback();
+    }
+  }
+
+  // AI-assisted: I wrote the play/pause logic, and AI helped with error handling.
+  // Let the user play or pause the music with a button.
+  // Outside the course:
+  //  - userStartAudio() asks the browser for permission to play sound
+  //    (browsers block audio until the user clicks): https://p5js.org/reference/p5.sound/userStartAudio/
+  //  - `async` / `await` wait for that permission before playing, and try / catch / finally
+  //    shows a message instead of crashing if it fails:
+  //    https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Async_JS/Promises
   async togglePlayback() {
     if (!this.song || this.starting) {
       return;
@@ -73,12 +103,15 @@ class AudioController {
     } finally {
       this.starting = false;
       this.playButton.removeAttribute("disabled");
+      // Move keyboard focus off the button, otherwise pressing Space (attract/repel)
+      // would "click" the button again and pause the music.
+      this.playButton.elt.blur();
     }
   }
 
+  // Human-written: called every frame by sketch.js.
+  // Smooth the audio values with lerp() to avoid sudden jumps in the circles.
   update(dt) {
-    // Smooth the audio values to avoid sudden changes in the circles.
-    //human written
     const seconds = constrain(dt, 0, 0.05);
     const smoothing = constrain(seconds * 8, 0, 1);
     let playing = false;
@@ -99,7 +132,8 @@ class AudioController {
       this.cooldown[band] = Math.max(0, this.cooldown[band] - seconds);
       this.pulses[band] = false;
 
-// Detect sudden increases in sound energy to trigger ripple effects.
+      // Detect sudden increases in sound energy to trigger ripple effects.
+      // cooldown stops one beat from firing many ripples in a row.
       const rise = targetEnergy - this.previousEnergy[band];
       if (playing && targetEnergy > 40 && rise > 14 && this.cooldown[band] === 0) {
         this.pulses[band] = true;
@@ -109,8 +143,8 @@ class AudioController {
     }
   }
 
-    // Large circles react to bass, medium to mid, and small to treble.
   // Human-written: Match circle sizes to different sound frequencies.
+  // Large circles react to bass, medium to mid, and small to treble.
   getBand(baseRadius) {
     if (baseRadius >= 70) {
       return "bass";
@@ -121,9 +155,10 @@ class AudioController {
     return "treble";
   }
 
-    // Change the circle size based on the energy of its sound frequency.
   // Human-written: Change circle size based on audio energy.
-  getScale(baseRadius) {
+  // activity (0–1) comes from the Time mechanic: the pulse is full in BLOOM and
+  // softer in FADE, so the music "falls asleep" with the universe.
+  getScale(baseRadius, activity = 1) {
     const band = this.getBand(baseRadius);
     let amount = 0.25;
     if (band === "bass") {
@@ -131,31 +166,26 @@ class AudioController {
     } else if (band === "mid") {
       amount = 0.30;
     }
-    const bandScale = this.energy[band] / 255 * amount;
-    return 1 + bandScale + this.level * 0.03;
+    const bandScale = this.energy[band] / 255 * amount * activity;
+    return 1 + bandScale + this.level * 0.03 * activity;
   }
 
-  getState(renderStates, id) {
-    // Adapt the earlier Map-based main sketch and the classroom-style object.
-    if (typeof renderStates.get === "function") {
-      return renderStates.get(id);
-    }
-    return renderStates[id];
-  }
-
-  drawEffects(renderStates, now, dt) {
+  // Draws ripples and satellites on top of the circles.
+  // renderStates = each circle's final position/size/colour from sketch.js,
+  // so the effects follow circles that Input has moved or Audio has scaled.
+  drawEffects(renderStates, now, dt, circleList = circles) {
     const seconds = constrain(dt, 0, 0.05);
     const sourceCounts = { bass: 0, mid: 0, treble: 0 };
     push();
     colorMode(RGB, 255, 255, 255, 255);
-    for (let c of circles) {
+    for (let c of circleList) {
       const band = this.getBand(c.baseRadius);
       // Pick at most two stable sources per band; invisible sources stay quiet.
       if (sourceCounts[band] >= 2) {
         continue;
       }
       sourceCounts[band]++;
-      const state = this.getState(renderStates, c.id);
+      const state = renderStates[c.id];
       if (!state || state.alpha <= 0 || state.radius <= 0) {
         continue;
       }
@@ -173,7 +203,7 @@ class AudioController {
     let remainingRipples = [];
     for (let ripple of this.ripples) {
       ripple.age += seconds;
-      const state = this.getState(renderStates, ripple.sourceId);
+      const state = renderStates[ripple.sourceId];
       if (ripple.age < ripple.lifetime && state && state.alpha > 0) {
         this.drawRipple(ripple, state);
         remainingRipples.push(ripple);
@@ -183,8 +213,7 @@ class AudioController {
     pop();
   }
 
-    // Draw expanding rings that slowly fade away over time.
-// Human-written: Draw expanding ripple rings.
+  // Human-written: Draw expanding ripple rings that slowly fade away over time.
   drawRipple(ripple, state) {
     const fade = 1 - ripple.age / ripple.lifetime;
     noFill();
@@ -197,8 +226,8 @@ class AudioController {
     }
   }
 
-    // Draw small dots orbiting the circles when the music gets louder.
-// AI-assisted: Animate small circles orbiting larger circles.
+  // AI-assisted: Animate small dots orbiting the circles when the music gets louder.
+  // Math.cos / Math.sin place each dot on a circle around the planet (polar coordinates).
   drawSatellites(c, state, band, now) {
     // Energy reveals satellites; pausing smoothly makes them disappear.
     const visibility = constrain((this.energy[band] - 70) / 185, 0, 1);
