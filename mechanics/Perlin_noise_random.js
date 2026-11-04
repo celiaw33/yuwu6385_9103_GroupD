@@ -1,6 +1,26 @@
+// =============================================================================
+// Perlin_noise_random.js — Perlin noise & randomness mechanic (Celia, yuwu6385)
+// -----------------------------------------------------------------------------
+// RANDOMNESS builds the universe: makeComposition() rebuilds Kandinsky's layout
+// from a random seed, nudging every small circle's position, size, colour and
+// alpha within small ranges. Each seed is a new "variation" of Several Circles;
+// the Time mechanic asks for a new variation at the end of every cycle.
+// PERLIN NOISE keeps it alive: noise() changes smoothly over time to give each
+// circle a gentle drift, a soft wobbling edge, slow changes in brightness and
+// watercolour-like pigment clouds.
+// Perlin owns the circles' starting data and their texture; it never decides
+// their size (Audio), life/colour (Time) or gravity offset (Input).
+//
+// AI acknowledgement: functions marked "AI-assisted" below. In the final
+// integration round Claude (Anthropic) also helped to add newVariation(),
+// makePlantedCircle(), the `activity` link with Time and these comments.
+// Reviewed and tested by Celia.
+// =============================================================================
 class PerlinController {
   constructor() {
      this.activeSeed = floor(random(100000));
+     this.variationNumber = 1; // "Universe No. X" — goes up with every new seed.
+     this.plantedCount = 0;    // Used to give each planted star a unique id.
 
      // AI-assisted: group the animation settings for parameter testing.
      this.driftAmount = 3;
@@ -11,6 +31,8 @@ class PerlinController {
      this.textureOpacity = 0.025;
   }
 
+  // Builds the full list of circles from activeSeed.
+  // randomSeed() makes random() repeatable, so the same seed always gives the same universe.
   makeComposition() {
     randomSeed(this.activeSeed);
     noiseSeed(this.activeSeed);
@@ -91,6 +113,44 @@ class PerlinController {
     return result;
   }
 
+  // Called by Time (through sketch.js) at the end of every cycle:
+  // pick a new seed and build a new variation of the universe.
+  newVariation() {
+    this.activeSeed = floor(random(100000));
+    this.variationNumber++;
+    return this.makeComposition();
+  }
+  
+  // A small star planted by the viewer (Input: click on empty space).
+  // Its colour is borrowed from one of the painting's own small circles, so new
+  // stars still belong to Kandinsky's palette.
+  makePlantedCircle(x, y, palette) {
+    this.plantedCount++;
+    const source = random(palette);
+    return {
+      id: "star-" + this.plantedCount,
+      baseX: x,
+      baseY: y,
+      baseRadius: random(9, 20),
+      baseColour: [source[0], source[1], source[2]],
+      baseAlpha: 235,
+      edgeSeed: random(1000),
+      type: "disc"
+    };
+  }
+
+  // Collects the colours of all simple discs, for planted stars to borrow.
+  getPalette(circleList) {
+    let palette = [];
+    for (let c of circleList) {
+      if (c.type === "disc") {
+        palette.push(c.baseColour);
+      }
+    }
+    return palette;
+  }
+
+// A compound circle (several layers drawn together, e.g. the blue crescent).
   makeLayeredCircle(id, x, y, layers) {
     return {
       id: id,
@@ -106,7 +166,9 @@ class PerlinController {
   }
 
   // AI-assisted: map smooth noise values to horizontal and vertical offsets.
-  getDrift(c, now) {
+  // noise() returns 0–1, so (value * 2 - 1) turns it into -1…1 before scaling.
+  // activity (0–1) comes from Time: circles drift less as the universe fades.
+  getDrift(c, now, activity = 1) {
   // Keep compound shapes fixed to anchor the composition.
   if (c.type === "layered") {
     return { x: 0, y: 0 };
@@ -115,22 +177,24 @@ class PerlinController {
   const time = now * this.driftSpeed;
 
   return {
-    x: (noise(c.edgeSeed, 201, time) * 2 - 1) * this.driftAmount,
-    y: (noise(c.edgeSeed, 401, time) * 2 - 1) * this.driftAmount
-  };
-}
+    x: (noise(c.edgeSeed, 201, time) * 2 - 1) * this.driftAmount * activity,
+    y: (noise(c.edgeSeed, 401, time) * 2 - 1) * this.driftAmount * activity
+    };
+  }
 
   // AI-assisted: use smooth noise to vary the RGB brightness.
   getLight(c, now) {
   // Preserve the dark centres of compound shapes.
   if (c.type === "layered") {
     return 0;
-  }
+    }
 
   const time = now * this.driftSpeed;
   return (noise(c.edgeSeed, 51, time) * 2 - 1) * this.lightAmount;
-}
+  }
 
+  // Draws one circle with a noisy, hand-painted edge.
+  // Layered circles draw every layer, keeping Time's colour change across all layers.
   drawOrganicDisc(c, state, now) {
     push();
     colorMode(RGB, 255, 255, 255, 255);
@@ -204,6 +268,7 @@ class PerlinController {
     endShape(CLOSE);
   }
 
+  // Soft translucent patches inside a circle, like uneven watercolour pigment.
   drawPigmentClouds(c, state, now) {
     // Compound shapes already shade their layers in the correct stacking order.
     if (c.type !== "layered") {
