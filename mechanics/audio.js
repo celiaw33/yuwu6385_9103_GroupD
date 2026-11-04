@@ -78,6 +78,7 @@ class AudioController {
 
   update(dt) {
     // Smooth the audio values to avoid sudden changes in the circles.
+    //human written
     const seconds = constrain(dt, 0, 0.05);
     const smoothing = constrain(seconds * 8, 0, 1);
     let playing = false;
