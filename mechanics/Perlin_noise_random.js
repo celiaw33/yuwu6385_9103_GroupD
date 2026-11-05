@@ -316,6 +316,3 @@ class PerlinController {
     }
   }
 }
-
-
-// Reference: https://p5js.org/reference/p5/noise/
