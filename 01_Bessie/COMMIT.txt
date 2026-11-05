@@ -1,4 +1,0 @@
-WHO:     Bessie (from your own GitHub account)
-MESSAGE: Input: restore keyboard controls (keyPressed) and clean up InputController
-FILES:   mechanics/user_input.js, sketch.js
-WHAT:    Restores Space/arrow keys (keyPressed had been removed from sketch.js), adds header + AI acknowledgement, removes old Map code, passes renderStates as a parameter, prunes finished glows.
