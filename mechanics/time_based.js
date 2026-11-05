@@ -1,3 +1,24 @@
+// =============================================================================
+// time_based.js — Time-based mechanic (Yuan Wang, ywan0329)
+// -----------------------------------------------------------------------------
+// Time is the painting's score: like a piece of music, our universe has a
+// beginning, a climax and an end. Every cycle runs through four phases:
+//   BIRTH  — circles are born one by one, in the order of the composition
+//   GROWTH — each circle warms from cold grey-blue into its Kandinsky colour
+//   BLOOM  — the full composition breathes, halos are strongest
+//   FADE   — circles fade away one after another, then a new cycle begins
+// Each new cycle rotates the whole palette's hue, so no two cycles look the same.
+//
+// Timer is a small reusable stopwatch built on millis() (not frameCount), so the
+// rhythm is the same on every computer. TimeController owns the life cycle and
+// only RETURNS numbers (life, colour, halo, background), so it never writes onto
+// teammates' data.
+//
+// AI acknowledgement: Claude (Anthropic) helped to write these header comments,
+// the comments on techniques from outside the course, getActivity() and the
+// onNewCycle event during final integration. All changes were reviewed and tested by Yuan.
+// =============================================================================
+
 class Timer {
   constructor(duration, startTime = millis()) {
     this.duration = duration;
@@ -49,15 +70,17 @@ class TimeController {
     };
     this.cycleDuration = 0;
 
+    // Background colour for each phase (used by sketch.js via getBackgroundColor()).
+    // Deep space at birth, a faint indigo glow at bloom, darkest when the universe fades.
     this.phaseBackgrounds = {
-      BIRTH: color(16, 16, 22),
-      GROWTH: color(22, 22, 30),
-      BLOOM: color(27, 27, 36),
-      FADE: color(14, 14, 20)
+      BIRTH: color(5, 5, 10),
+      GROWTH: color(10, 10, 22),
+      BLOOM: color(20, 16, 38),
+      FADE: color(4, 4, 8)
     };
 
     this.coldColour = color(this.coldRGB[0], this.coldRGB[1], this.coldRGB[2]);
-    this.showDebug = true;
+    this.showDebug = false; // Press D in the sketch to show the phase panel.
 
     this.now = millis();
     this.ids = [];          // every circle id Time knows about, in birth order
@@ -165,6 +188,8 @@ class TimeController {
     const delay = (1 - i / this.ids.length) * 0.4;
     const t = constrain((phaseProgress - delay) / 0.6, 0, 1);
     // fadeStartLife keeps the fade starting exactly where BLOOM left off (no jump).
+    // `??` (nullish coalescing, outside the course) means "use 1 if there is no value yet".
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Nullish_coalescing
     const startLife = this.fadeStartLife[id] ?? 1;
     return birth * startLife * (1 - this.easeInOut(t));
   }
@@ -216,6 +241,8 @@ class TimeController {
 
     if (this.currentPhase === 'FADE') {
       // Remember each circle's brightness at fade start so the fade has a stable starting value.
+      // Object.assign({}, obj) makes a copy of the object (outside the course):
+      // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/assign
       this.fadeStartLife = Object.assign({}, this.lives);
     }
   }
@@ -225,6 +252,8 @@ class TimeController {
     this.startCycle();
   }
 
+  // "easeInOutQuad" easing curve, from https://easings.net/#easeInOutQuad
+  // The `? :` (ternary operator) picks the first formula for x < 0.5, the second otherwise.
   easeInOut(x) {
     // Accelerate through the middle and ease at both ends for smoother transitions.
     return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
@@ -233,6 +262,7 @@ class TimeController {
   // ---- Read-only values for the rest of the sketch ----
   // Every getter below accepts either a circle object or a circle id.
 
+  // Accepts either a circle object or an id string and always returns the id.
   idOf(circleOrId) {
     return (typeof circleOrId === 'object' && circleOrId !== null) ? circleOrId.id : circleOrId;
   }
@@ -293,6 +323,8 @@ class TimeController {
   }
 
   // Rotate a colour's hue by `degrees` using the standard hue-rotate matrix on RGB.
+  // Matrix values from the W3C Filter Effects spec (feColorMatrix "hueRotate"):
+  // https://www.w3.org/TR/filter-effects-1/#feColorMatrixElement
   // Works on RGB 0-255, so it does not depend on p5's colorMode or angleMode.
   shiftHue(col, degrees) {
     if (degrees % 360 === 0) {
@@ -310,12 +342,15 @@ class TimeController {
     return color(constrain(nr, 0, 255), constrain(ng, 0, 255), constrain(nb, 0, 255), alpha(col));
   }
 
+  // Toggled with the D key in sketch.js — useful when presenting the phases.
   toggleDebug() {
     this.showDebug = !this.showDebug;
   }
 
   drawDebugPanel() {
-    if (!this.showDebug) return;
+    if (!this.showDebug) {
+      return;
+    }
     // Save and restore drawing state so debug styling does not affect the rest of the sketch.
     push();
     noStroke();
