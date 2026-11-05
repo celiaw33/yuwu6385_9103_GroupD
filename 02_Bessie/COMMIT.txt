@@ -1,4 +1,0 @@
-WHO:     Bessie (from your own GitHub account)
-MESSAGE: Input: larger gravity field and visible black hole when holding the mouse
-FILES:   mechanics/user_input.js
-WHAT:    Field radius 90px -> 20% of canvas so the effect is noticeable; holding the mouse pulls harder (x2.2) and the cursor becomes a dark core with faster rings.
