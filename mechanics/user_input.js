@@ -5,7 +5,7 @@
 //  - Move the mouse: nearby circles are pulled in (attract) or pushed away (repel).
 //    Big circles are "heavy" and move less, small circles fly — Kandinsky's idea
 //    of mass and position made physical.
-//  - Hold the mouse: a stronger pull.
+//  - Hold the mouse: a stronger "black hole" pull.
 //  - Click a planet: it glows.
 //  - Click empty space: a gravity wave ripples outward from that point.
 //  - SPACE switches attract / repel; arrow keys change strength (↑↓) and range (←→).
@@ -16,17 +16,17 @@
 // AI acknowledgement: the original gravity / easing / keyboard logic was written by
 // Bessie in her Week 9 pilot (with help from Claude, Anthropic). The gravity-wave
 // ripple code was added during group integration. Claude (Anthropic) also
-// helped to clean up this file and add comments.
+// helped to clean up this file, add comments and tune the hold interaction.
 // All changes were reviewed and tested by Bessie.
 // =============================================================================
 
 class InputController {
   constructor() {
     this.attractMode = true; // true = attract, false = repel (SPACE toggles)
-    this.fieldRadius = 90 / 680; // Reach of the hover gravity (90 px on the 680 px canvas side).
+    this.fieldRadius = 0.2;  // Reach of the hover gravity, as a fraction of the shorter canvas side.
     this.strength = 0.08;    // Gravity strength as a fraction of the shorter canvas side (↑↓ keys).
     this.easing = 0.08;      // Smaller values make following and returning slower.
-    this.holdBoost = 1.8;    // Holding the mouse multiplies the pull.
+    this.holdBoost = 2.2;    // Holding the mouse multiplies the pull ("black hole").
 
     // Gravity-wave settings (click on empty space)
     this.rippleDuration = 1.8; // Seconds before a click ripple disappears.
@@ -98,7 +98,7 @@ class InputController {
       const closeness = 1 - d / reach; // 1 at the mouse, 0 at the edge of the field
       let force = this.strength * minDimension * closeness * weight;
       if (this.pointer.pressed) {
-        force = force * this.holdBoost; // Holding the mouse pulls harder.
+        force = force * this.holdBoost; // "Black hole": holding the mouse pulls harder.
       }
       // Direction from the circle to the mouse, divided by d so its length is 1.
       const directionX = (this.pointer.x - circleX) / d;
@@ -239,7 +239,12 @@ class InputController {
       return;
     }
     const reach = this.fieldRadius * min(width, height);
-    let progress = (now % 1000) / 1000; // 0 → 1 every second, then back to 0
+    // While the mouse is held, rings loop faster and the core grows ("black hole").
+    let loopTime = 1000;
+    if (pointer.pressed) {
+      loopTime = 450;
+    }
+    let progress = (now % loopTime) / loopTime; // 0 → 1, then back to 0
     if (this.attractMode) {
       progress = 1 - progress;
     }
@@ -247,7 +252,10 @@ class InputController {
     strokeWeight(1);
     for (let i = 0; i < 3; i++) {
       const ringProgress = (progress + i / 3) % 1;
-      const ringAlpha = 70 * (1 - ringProgress);
+      let ringAlpha = 70 * (1 - ringProgress);
+      if (pointer.pressed) {
+        ringAlpha = ringAlpha * 1.8;
+      }
       if (this.attractMode) {
         stroke(170, 150, 255, ringAlpha);
       } else {
@@ -256,8 +264,16 @@ class InputController {
       circle(pointer.x, pointer.y, reach * 2 * ringProgress);
     }
     noStroke();
-    fill(255, 160);
-    circle(pointer.x, pointer.y, 8);
+    if (pointer.pressed) {
+      fill(5, 5, 10, 230);       // dark core
+      circle(pointer.x, pointer.y, 18);
+      noFill();
+      stroke(255, 200);          // bright rim
+      circle(pointer.x, pointer.y, 20);
+    } else {
+      fill(255, 160);
+      circle(pointer.x, pointer.y, 8);
+    }
   }
 
   drawClickRipples() {
@@ -308,7 +324,7 @@ class InputController {
     fill(200, 205, 220, 170);
     textSize(12);
     textAlign(LEFT, BASELINE);
-    text(label + "  ·  Space: attract/repel  ·  ↑↓ strength  ·  ←→ range  ·  Hold: stronger" +
+    text(label + "  ·  Space: attract/repel  ·  ↑↓ strength  ·  ←→ range  ·  Hold: black hole" +
          "  ·  Click planet: glow  ·  Click space: gravity wave",
          16, height - 14);
   }
