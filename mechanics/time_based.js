@@ -90,6 +90,11 @@ class TimeController {
     this.ids = [];          // every circle id Time knows about, in birth order
     this.cycleCount = 0;    // how many full cycles have finished
     this.mainBirthTimer = null; // Preserve the central crescent's first fade-in.
+
+    // Event hook: sketch.js can set this to a function that is called when a cycle ends.
+    // If it returns a new circles array, the next cycle uses those circles
+    // (sketch.js uses this to ask Perlin for a new random variation of the universe).
+    this.onNewCycle = null;
     this.startCycle();
   }
 
@@ -104,6 +109,9 @@ class TimeController {
 
   startCycle() {
     this.now = millis();
+    // Rebuild the birth order from the current circles, so circles that were removed
+    // (e.g. old stars planted by the viewer) do not keep a birth slot.
+    this.ids = [];
     this.syncIds();
 
     // Everything below is keyed by circle id, so Time never has to write onto a circle.
@@ -253,8 +261,16 @@ class TimeController {
     }
   }
 
+  // Event: fired when FADE finishes. Tells sketch.js (through onNewCycle) that a new
+  // universe is about to be born, then starts the next cycle.
   onCycleComplete() {
     this.cycleCount++;
+    if (this.onNewCycle) {
+      const nextCircles = this.onNewCycle(this.cycleCount);
+      if (Array.isArray(nextCircles)) {
+        this.circles = nextCircles;
+      }
+    }
     this.startCycle();
   }
 
