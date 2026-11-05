@@ -7,7 +7,8 @@
 //    of mass and position made physical.
 //  - Hold the mouse: a stronger "black hole" pull.
 //  - Click a planet: it glows.
-//  - Click empty space: a gravity wave ripples outward from that point.
+//  - Click empty space: a gravity wave ripples outward, and sketch.js plants a
+//    new star at that point (the star is then born and fades with the Time mechanic).
 //  - SPACE switches attract / repel; arrow keys change strength (↑↓) and range (←→).
 //
 // This file only ever returns a position OFFSET for each circle. It never changes
@@ -16,8 +17,8 @@
 // AI acknowledgement: the original gravity / easing / keyboard logic was written by
 // Bessie in her Week 9 pilot (with help from Claude, Anthropic). The gravity-wave
 // ripple code was added during group integration. Claude (Anthropic) also
-// helped to clean up this file, add comments and tune the hold interaction.
-// All changes were reviewed and tested by Bessie.
+// helped to clean up this file, add comments, and add the click "event" that lets
+// sketch.js plant a new star. All changes were reviewed and tested by Bessie.
 // =============================================================================
 
 class InputController {
@@ -169,10 +170,13 @@ class InputController {
   }
 
   // Called by sketch.js from mousePressed().
-  // Click a planet = glow. Click empty space = gravity wave.
+  // Returns what happened, so sketch.js can connect the click to other mechanics:
+  //   "glow" — a planet was clicked
+  //   "wave" — empty space was clicked and a gravity wave started (sketch.js plants a star)
+  //   null   — nothing happened
   handleMousePressed(pointer, circleList, states) {
     if (!pointer.inside) {
-      return;
+      return null;
     }
     // Hit-test the final drawn positions, starting with the circle drawn last (on top).
     for (let i = circleList.length - 1; i >= 0; i--) {
@@ -181,12 +185,12 @@ class InputController {
       if (state && state.alpha > 15 &&
           dist(pointer.x, pointer.y, state.x, state.y) <= state.radius) {
         this.startGlow(c.id);
-        return;
+        return "glow";
       }
     }
 
     if (this.clickRipples.length >= this.maxRipples) {
-      return;
+      return null;
     }
     // Capture the mode and strength now, so a later key press does not change this wave.
     this.clickRipples.push({
@@ -197,6 +201,7 @@ class InputController {
       strength: this.strength * min(width, height) * this.waveBoost,
       attractMode: this.attractMode
     });
+    return "wave";
   }
 
   startGlow(id) {
@@ -325,7 +330,7 @@ class InputController {
     textSize(12);
     textAlign(LEFT, BASELINE);
     text(label + "  ·  Space: attract/repel  ·  ↑↓ strength  ·  ←→ range  ·  Hold: black hole" +
-         "  ·  Click planet: glow  ·  Click space: gravity wave",
+         "  ·  Click planet: glow  ·  Click space: gravity wave + new star  ·  D: time panel",
          16, height - 14);
   }
 }
