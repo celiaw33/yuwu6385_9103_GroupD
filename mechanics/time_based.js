@@ -59,6 +59,10 @@ class TimeController {
     this.haloSpeed = 0.002;         // how fast halos breathe
     this.haloPhaseStep = 1.7;       // breathing offset between neighbours, so they never sync
     this.haloWeights = { BIRTH: 0.35, GROWTH: 0.6, BLOOM: 1, FADE: 0.5 };
+    // How lively the universe is in each phase (0–1). Audio and Perlin read this
+    // through getActivity(): the music pulse and drift are strongest in BLOOM and
+    // soften in FADE, as if the universe is falling asleep.
+    this.activityLevels = { BIRTH: 0.55, GROWTH: 0.8, BLOOM: 1, FADE: 0.35 };
 
     this.phaseOrder = ['BIRTH', 'GROWTH', 'BLOOM', 'FADE'];
     // BIRTH depends on how many circles there are, so it is filled in by startCycle().
@@ -124,6 +128,7 @@ class TimeController {
     this.birthTimer = new Timer(this.birthInterval, this.now);
     this.previousBackground = this.phaseBackgrounds.FADE;
     this.previousHaloWeight = this.haloWeights.FADE;
+    this.previousActivity = this.activityLevels.FADE;
     this.currentPhase = 'BIRTH';
     this.phaseTimer = new Timer(this.phaseDurations.BIRTH, this.now);
     this.onBirth(0);
@@ -235,6 +240,7 @@ class TimeController {
   goToNextPhase() {
     this.previousBackground = this.phaseBackgrounds[this.currentPhase];
     this.previousHaloWeight = this.haloWeights[this.currentPhase];
+    this.previousActivity = this.activityLevels[this.currentPhase];
     const index = this.phaseOrder.indexOf(this.currentPhase);
     this.currentPhase = this.phaseOrder[index + 1];
     this.phaseTimer = new Timer(this.phaseDurations[this.currentPhase], this.now);
@@ -313,6 +319,15 @@ class TimeController {
     const amount = constrain((this.now - this.phaseTimer.startTime) / this.backgroundFade, 0, 1);
     const from = this.previousHaloWeight;
     const to = this.haloWeights[this.currentPhase];
+    return from + (to - from) * amount;
+  }
+
+  // 0 to 1: how lively the universe is right now. Read by Audio (pulse size) and
+  // Perlin (drift distance). Blends between phases like the halo weight, so there is no jump.
+  getActivity() {
+    const amount = constrain((this.now - this.phaseTimer.startTime) / this.backgroundFade, 0, 1);
+    const from = this.previousActivity;
+    const to = this.activityLevels[this.currentPhase];
     return from + (to - from) * amount;
   }
 
