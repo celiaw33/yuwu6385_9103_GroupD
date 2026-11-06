@@ -37,6 +37,8 @@ IDEA9103 Creative Coding — Major Project, Group D
 
 ## 2. Inspiration
 
+![One painting, four ideas, four mechanics](assets/readme_graphic/a.png)
+
 **Wassily Kandinsky, *Several Circles (Einige Kreise)*, 1926** — Solomon R. Guggenheim Museum, New York ([guggenheim.org/artwork/1992](https://www.guggenheim.org/artwork/1992)).
 
 Kandinsky painted this during his Bauhaus years, when he was studying how colour and form affect us emotionally. Four ideas from the painting and his writing shaped our project directly:
@@ -53,6 +55,8 @@ We chose to **reinterpret rather than copy**: the composition stays recognisable
 ## 3. Techniques and how the code works
 
 ### Structure
+
+![One circle, four owners: code structure and per-frame pipeline](assets/readme_graphic/d.png)
 
 ```
 index.html                       loads p5.js, p5.sound, the four mechanics, then sketch.js
@@ -83,6 +87,8 @@ final alpha  = baseAlpha × Time life
 The final values for every circle are stored in `renderStates` (id → x, y, radius, alpha, colour, halo). Effects that are drawn on top — Audio's ripples and satellites, Input's glows — read `renderStates`, so they follow a circle wherever gravity or music has moved it.
 
 ### Links between mechanics
+
+![How Time, Audio, Perlin and User Input connect](assets/readme_graphic/e.png)
 
 - **Time → Audio & Perlin:** `getActivity()` is 1 in BLOOM and drops in FADE. Audio multiplies its pulse and Perlin its drift by this value, so the music's effect and the movement "fall asleep" with the universe.
 - **Time → Random (event):** when FADE ends, Time fires its `onNewCycle` event. `sketch.js` asks Perlin for `newVariation()` — a new random seed and therefore a new version of the composition — which Time then gives birth to.
@@ -132,6 +138,10 @@ Outside the course (each one is explained and linked in a code comment): `create
 
 ### Key decisions
 
+![Iteration 1: four pilots became one universe](assets/readme_graphic/c.png)
+
+![Iteration 2: team changes from Week 9 to Week 13 and their reasons](assets/readme_graphic/b.png)
+
 - **One owner per quality.** Early on our mechanics overlapped (Time and Audio both changed size). We agreed that Audio owns size, Time owns life and colour, Perlin owns layout and texture, and Input owns position offset. This made integration much easier.
 - **Fixed design canvas, scaled by CSS.** We draw in a 960 × 680 design space and `style.css` scales the canvas to fit the window. This keeps Kandinsky's composition in proportion on every screen. p5 converts `mouseX`/`mouseY` to canvas coordinates, so the interaction still lines up after scaling.
 - **The crescent stays.** The large blue crescent is drawn as one *layered* circle and does not fade with the phases, so the universe always has an anchor.
@@ -144,18 +154,26 @@ Outside the course (each one is explained and linked in a code comment): `create
 ## 4. Mechanic ownership
 
 ### Audio — Chenyu Wang (Lunette) · `mechanics/audio.js`
+
+![Audio: from pilot to final](assets/readme_graphic/f.png)
 Music drives **size**. FFT splits the track into bass, mid and treble; large circles respond to bass, medium to mid and small to treble, while the overall volume adds a subtle breathing to everything. Sudden rises in a band release fading ripples, loud passages reveal small satellites orbiting the circles, and strong bass makes a glowing aura swell around the large circles. *Why:* it turns Kandinsky's belief that colours have sounds into something you can see.
 *Decision:* in Week 9 the pilot had its own AudioCircle and AudioRipple classes; once the group shared one composition, these were merged into one AudioController that only returns a size and draws effects on top, so Audio never changes a circle's position or colour.
 
 ### Time-based — Yuan Wang · `mechanics/time_based.js`
+
+![Time: from pilot to final](assets/readme_graphic/g.png)
 Time drives **life, colour and phase**. A 4-phase cycle — Birth, Growth, Bloom, Fade — is controlled by `Timer` objects: circles are born one by one in the order of the composition, warm from grey-blue into colour, breathe with offset rhythms in Bloom, and fade one after another. Each phase has its own background tone, each new cycle rotates the palette and starts with a "big bang" ring from the crescent, and `getActivity()` tells Audio and Perlin how lively the universe is. *Why:* music has a beginning, a climax and an end — so does our universe.
 *Decision:* the Week 9 plan had three phases in 20 seconds; a fourth phase, Growth, was added so each circle visibly warms from grey-blue into its colour, and the birth phase now scales with the number of circles (one every 0.35 s).
 
 ### Perlin noise & randomness — Celia · `mechanics/Perlin_noise_random.js`
+
+![Perlin and randomness: from pilot to final](assets/readme_graphic/h.png)
 Randomness drives **the composition**: each random seed slightly varies the position, size, colour and alpha of every small circle, so every cycle is a new "Universe No. X". Perlin noise drives **texture and motion**: gentle drift, a slowly wobbling edge, shifting brightness, watercolour-like pigment clouds, and a smoky painted background with a pale glow around the crescent (new for every universe). *Why:* the original is hand-painted and alive; noise brings back that imperfection.
 *Decision:* colours were moved from HSB to RGB so Time can blend and hue-rotate the same values, and the crescent, green ring and moon became layered circles so each moves and scales as one body.
 
 ### User input — Bessie · `mechanics/user_input.js`
+
+![User input: from pilot to final](assets/readme_graphic/i.png)
 The viewer drives **position**. The mouse is a gravity source: circles within its field are pulled in or pushed away and glide back home when it leaves. Heavier (larger) circles move less, so Kandinsky's hierarchy stays readable. Holding the mouse creates a black hole; Space switches attract/repel; arrow keys change strength and range; clicking a planet makes it glow; clicking empty space sends a gravity wave that leaves a new star for the Time mechanic; circles pushed into each other mix their colours like light and spark. *Why:* it is the only mechanic that lets the viewer step inside the painting and *feel* the weight of each colour.
 
 ---
