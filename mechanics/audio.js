@@ -23,6 +23,8 @@ let song;
 
 // Load the background music before the sketch starts.
 function preload(){
+  // Music: "Galaxy Systems" by The_Mountain (2023), Pixabay, royalty-free (Pixabay Content License).
+  // https://pixabay.com/music/beats-galaxy-systems-136924/
   song = loadSound("assets/Galaxy.mp3");
 }
 
