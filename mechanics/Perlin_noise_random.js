@@ -13,7 +13,8 @@
 //
 // AI acknowledgement: functions marked "AI-assisted" below. In the final
 // integration round Claude (Anthropic) also helped to add newVariation(),
-// makePlantedCircle(), the `activity` link with Time and these comments.
+// makePlantedCircle(), makeBackground(), the `activity` link with Time and
+// these comments.
 // Reviewed and tested by Celia.
 // =============================================================================
 class PerlinController {
@@ -34,6 +35,8 @@ class PerlinController {
   // Builds the full list of circles from activeSeed.
   // randomSeed() makes random() repeatable, so the same seed always gives the same universe.
   makeComposition() {
+    // randomSeed() / noiseSeed() (outside the tutorials) fix the starting point of random() and noise():
+    // https://p5js.org/reference/p5/randomSeed/ · https://p5js.org/reference/p5/noiseSeed/
     randomSeed(this.activeSeed);
     noiseSeed(this.activeSeed);
     let result = [];
@@ -119,6 +122,49 @@ class PerlinController {
     this.activeSeed = floor(random(100000));
     this.variationNumber++;
     return this.makeComposition();
+  }
+
+  // Perlin & random: the painting's ground is not flat black but cloudy, smoky and
+  // uneven, with a pale glow around the big crescent. noise() decides where the
+  // ground is lighter or darker; random() scatters soft dabs so it looks painted.
+  // It is drawn ONCE per variation onto an off-screen layer, so it costs nothing per frame.
+  // createGraphics() makes that off-screen layer (outside the course):
+  // https://p5js.org/reference/p5/createGraphics/
+  makeBackground(circleList) {
+    const layer = createGraphics(width, height);
+    layer.noStroke();
+    const offset = this.activeSeed % 1000; // a different sky for every seed
+    const step = 14;
+    for (let y = 0; y < height + step; y += step) {
+      for (let x = 0; x < width + step; x += step) {
+        const smoke = noise(x * 0.004 + offset, y * 0.004 + offset);
+        const detail = noise(x * 0.02 + offset + 50, y * 0.02 + offset + 50);
+        const value = smoke * 0.75 + detail * 0.25;
+        const dabX = x + random(-step, step);
+        const dabY = y + random(-step, step);
+        const dabSize = step * random(2.6, 4);
+        // Each dab is three soft layers (big and faint → small and stronger),
+        // so the edges blur into each other like wet paint.
+        for (let soft = 1; soft <= 3; soft++) {
+          if (value > 0.5) {
+            layer.fill(150, 160, 185, (value - 0.5) * 45);   // lighter smoky clouds
+          } else {
+            layer.fill(0, 0, 4, (0.5 - value) * 60);         // deeper shadows
+          }
+          layer.circle(dabX, dabY, dabSize * (1.4 - soft * 0.3));
+        }
+      }
+    }
+    // Pale glow around the crescent, like the white corona in the painting.
+    for (let c of circleList) {
+      if (c.id === "main") {
+        for (let i = 0; i < 14; i++) {
+          layer.fill(225, 235, 245, 7);
+          layer.circle(c.baseX + random(-6, 6), c.baseY + random(-6, 6), 470 + i * 9);
+        }
+      }
+    }
+    return layer;
   }
   
   // A small star planted by the viewer (Input: click on empty space).
