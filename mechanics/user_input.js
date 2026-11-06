@@ -9,6 +9,7 @@
 //  - Click a planet: it glows.
 //  - Click empty space: a gravity wave ripples outward, and sketch.js plants a
 //    new star at that point (the star is then born and fades with the Time mechanic).
+//  - Circles pushed into each other by gravity mix their colours and spark.
 //  - SPACE switches attract / repel; arrow keys change strength (↑↓) and range (←→).
 //
 // This file only ever returns a position OFFSET for each circle. It never changes
@@ -18,7 +19,8 @@
 // Bessie in her Week 9 pilot (with help from Claude, Anthropic). The gravity-wave
 // ripple code was added during group integration. Claude (Anthropic) also
 // helped to clean up this file, add comments, and add the click "event" that lets
-// sketch.js plant a new star. All changes were reviewed and tested by Bessie.
+// sketch.js plant a new star, the star-birth flash, and the collision colour
+// mixing with sparks. All changes were reviewed and tested by Bessie.
 // =============================================================================
 
 class InputController {
@@ -41,11 +43,22 @@ class InputController {
     this.offsets = {};      // id -> { x, y } offset for each circle; baseX/baseY are never changed.
     this.clickRipples = []; // Temporary gravity waves.
     this.glows = [];        // Planets that were clicked and are glowing.
+    this.starFlares = [];   // Bright flashes where a new star is born.
+
+    // Collisions: when gravity pushes two circles into each other, their colours mix.
+    this.contacts = {};       // "idA|idB" -> { mix: 0–1, touching: true/false }
+    this.restingPairs = {};   // how deeply each pair already overlaps in the painting
+    this.restingFor = null;   // the circles array restingPairs was built for
+    this.mixedColours = {};   // id -> colour after mixing, for this frame
+    this.mixAmounts = {};     // id -> how strongly it is mixing (0–1)
+    this.sparks = [];         // bursts of light where two circles first touch
+    this.flareDuration = 1.2; // Seconds a star-birth flash lasts.
   }
 
   // Called once per frame by sketch.js. dt = seconds since the last frame.
   update(dt, pointer) {
     this.pointer = pointer;
+    this.lastDt = dt;
 
     // Fade glows, and drop the ones that have finished so the array does not grow forever.
     let activeGlows = [];
@@ -66,6 +79,16 @@ class InputController {
       }
     }
     this.clickRipples = remainingRipples;
+
+    // Age the star-birth flashes and keep only the ones still visible.
+    let remainingFlares = [];
+    for (let flare of this.starFlares) {
+      flare.age += dt;
+      if (flare.age < this.flareDuration) {
+        remainingFlares.push(flare);
+      }
+    }
+    this.starFlares = remainingFlares;
   }
 
   // sketch.js calls getOffset() for every circle, every frame.
@@ -169,6 +192,184 @@ class InputController {
     return { x: waveX, y: waveY };
   }
 
+  // ---- Collisions -----------------------------------------------------------
+  // Kandinsky's circles overlap like coloured glass and make new colours where
+  // they meet. Here, when gravity pushes two circles together, both colours mix
+  // and brighten — like two lights meeting — and a spark bursts at the contact
+  // point. When they drift apart, each slowly returns to its own colour.
+
+  // Remember how much each pair already overlaps in the painting, so only circles
+  // that gravity pushes DEEPER into each other react (the painting at rest stays calm).
+  findRestingPairs(circleList) {
+    this.restingPairs = {};
+    for (let i = 0; i < circleList.length; i++) {
+      for (let j = i + 1; j < circleList.length; j++) {
+        const a = circleList[i];
+        const b = circleList[j];
+        const depth = a.baseRadius + b.baseRadius - dist(a.baseX, a.baseY, b.baseX, b.baseY);
+        this.restingPairs[this.pairKey(a.id, b.id)] = Math.max(0, depth);
+      }
+    }
+    this.restingFor = circleList;
+  }
+
+  pairKey(idA, idB) {
+    if (idA < idB) {
+      return idA + "|" + idB;
+    }
+    return idB + "|" + idA;
+  }
+
+  // Called every frame by sketch.js after all final positions (states) are known.
+  updateCollisions(circleList, states, dt) {
+    if (this.restingFor !== circleList) {
+      this.findRestingPairs(circleList); // a new universe: new resting pairs
+    }
+    // Only single-colour discs mix; layered bodies (the crescent, the moon) stay themselves.
+    let discs = [];
+    for (let c of circleList) {
+      const state = states[c.id];
+      if (c.type === "disc" && state && state.alpha > 40) {
+        discs.push(c);
+      }
+    }
+
+    const step = constrain(dt * 4, 0, 1); // how fast colours mix and un-mix
+    for (let i = 0; i < discs.length; i++) {
+      for (let j = i + 1; j < discs.length; j++) {
+        const a = states[discs[i].id];
+        const b = states[discs[j].id];
+        const key = this.pairKey(discs[i].id, discs[j].id);
+        const d = dist(a.x, a.y, b.x, b.y);
+        // Overlap depth uses the base radius, so music pulses alone do not trigger it.
+        const depth = discs[i].baseRadius + discs[j].baseRadius - d;
+        const restDepth = this.restingPairs[key] || 0;
+        const needed = Math.max(6, 0.2 * Math.min(discs[i].baseRadius, discs[j].baseRadius));
+        const touching = depth > restDepth + needed;
+        let contact = this.contacts[key];
+        if (!contact) {
+          if (!touching) {
+            continue;
+          }
+          contact = { idA: discs[i].id, idB: discs[j].id, mix: 0, touching: false };
+          this.contacts[key] = contact;
+        }
+        if (touching && !contact.touching) {
+          // First touch: a spark at the contact point, between the two edges.
+          const share = a.radius / (a.radius + b.radius);
+          this.addSpark(lerp(a.x, b.x, share), lerp(a.y, b.y, share), a.colour, b.colour);
+        }
+        contact.touching = touching;
+        let target = 0;
+        if (touching) {
+          target = 1;
+        }
+        contact.mix = lerp(contact.mix, target, step);
+      }
+    }
+
+    // Work out each circle's mixed colour, and forget contacts that have faded out.
+    this.mixedColours = {};
+    this.mixAmounts = {};
+    for (let key in this.contacts) {
+      const contact = this.contacts[key];
+      const a = states[contact.idA];
+      const b = states[contact.idB];
+      if (!a || !b || (!contact.touching && contact.mix < 0.02)) {
+        delete this.contacts[key];
+        continue;
+      }
+      // The shared colour mixes like LIGHT ("screen" blending): each channel becomes
+      // 255 − (255 − a)(255 − b) / 255, so red + blue → glowing pink, yellow + blue → near white.
+      const glow = color(
+        255 - (255 - red(a.colour)) * (255 - red(b.colour)) / 255,
+        255 - (255 - green(a.colour)) * (255 - green(b.colour)) / 255,
+        255 - (255 - blue(a.colour)) * (255 - blue(b.colour)) / 255
+      );
+      const fromA = this.mixedColours[contact.idA] || a.colour;
+      const fromB = this.mixedColours[contact.idB] || b.colour;
+      this.mixedColours[contact.idA] = lerpColor(fromA, glow, contact.mix);
+      this.mixedColours[contact.idB] = lerpColor(fromB, glow, contact.mix);
+      // How strongly each circle is mixing, so sketch.js can make it glow.
+      this.mixAmounts[contact.idA] = Math.max(this.mixAmounts[contact.idA] || 0, contact.mix);
+      this.mixAmounts[contact.idB] = Math.max(this.mixAmounts[contact.idB] || 0, contact.mix);
+    }
+  }
+
+  // sketch.js asks for each circle's colour after mixing (or its own colour).
+  getMixedColour(id, ownColour) {
+    if (this.mixedColours[id]) {
+      return this.mixedColours[id];
+    }
+    return ownColour;
+  }
+
+  // 0 = not mixing, 1 = fully mixed (used to add a glow).
+  getMixAmount(id) {
+    return this.mixAmounts[id] || 0;
+  }
+
+  // Circles that are mixing shine with a soft glow in their new colour.
+  drawMixGlow(states) {
+    noFill();
+    for (let id in this.mixAmounts) {
+      const state = states[id];
+      const amount = this.mixAmounts[id];
+      if (state && amount > 0.02) {
+        const c = this.mixedColours[id];
+        for (let ring = 1; ring <= 3; ring++) {
+          strokeWeight(ring * 4);
+          stroke(red(c), green(c), blue(c), 70 * amount / ring);
+          circle(state.x, state.y, state.radius * 2 + ring * 6);
+        }
+      }
+    }
+  }
+
+  addSpark(x, y, colourA, colourB) {
+    if (this.sparks.length >= 30) {
+      return;
+    }
+    this.sparks.push({ x: x, y: y, age: 0, colourA: colourA, colourB: colourB,
+                       turn: random(TWO_PI) });
+  }
+
+  // A ring and ten little rays in the two circles' colours, flying outwards.
+  drawSparks(dt) {
+    const life = 0.9;
+    let remaining = [];
+    for (let spark of this.sparks) {
+      spark.age += dt;
+      if (spark.age >= life) {
+        continue;
+      }
+      remaining.push(spark);
+      const progress = spark.age / life;
+      const fade = 1 - progress;
+      noFill();
+      noStroke();
+      fill(255, 250, 235, 120 * fade * fade);       // bright flash at the contact point
+      circle(spark.x, spark.y, 30 + progress * 40);
+      noFill();
+      strokeWeight(2.5);
+      stroke(255, 250, 235, 230 * fade);
+      circle(spark.x, spark.y, 10 + progress * 130);
+      for (let i = 0; i < 12; i++) {
+        const angle = spark.turn + i * TWO_PI / 12;
+        const inner = 8 + progress * 55;
+        const outer = inner + 18 * fade + 6;
+        let c = spark.colourA;
+        if (i % 2 === 1) {
+          c = spark.colourB;
+        }
+        stroke(red(c), green(c), blue(c), 255 * fade);
+        line(spark.x + Math.cos(angle) * inner, spark.y + Math.sin(angle) * inner,
+             spark.x + Math.cos(angle) * outer, spark.y + Math.sin(angle) * outer);
+      }
+    }
+    this.sparks = remaining;
+  }
+
   // Called by sketch.js from mousePressed().
   // Returns what happened, so sketch.js can connect the click to other mechanics:
   //   "glow" — a planet was clicked
@@ -201,6 +402,8 @@ class InputController {
       strength: this.strength * min(width, height) * this.waveBoost,
       attractMode: this.attractMode
     });
+    // A new star will be born here: start its birth flash.
+    this.starFlares.push({ x: pointer.x, y: pointer.y, age: 0 });
     return "wave";
   }
 
@@ -281,6 +484,39 @@ class InputController {
     }
   }
 
+  // Star-birth flash: a soft glow that blooms and fades, plus a four-pointed
+  // sparkle that turns slowly, like a star lighting up. Uses push(), translate()
+  // and rotate() from the transformations tutorial.
+  drawStarFlares() {
+    for (let flare of this.starFlares) {
+      const progress = flare.age / this.flareDuration; // 0 → 1
+      const fade = 1 - progress;
+      const glowSize = 20 + 70 * Math.sin(progress * Math.PI); // grows, then shrinks
+
+      noStroke();
+      for (let i = 3; i >= 1; i--) {
+        fill(255, 240, 200, 40 * fade);
+        circle(flare.x, flare.y, glowSize * i * 0.6);
+      }
+      fill(255, 255, 255, 230 * fade);
+      circle(flare.x, flare.y, 6 + 6 * fade);
+
+      push();
+      translate(flare.x, flare.y);
+      rotate(progress * Math.PI / 2);
+      stroke(255, 245, 220, 220 * fade);
+      strokeWeight(2);
+      const rayLength = glowSize * 0.9;
+      line(-rayLength, 0, rayLength, 0);
+      line(0, -rayLength, 0, rayLength);
+      strokeWeight(1);
+      const shortRay = rayLength * 0.45;
+      line(-shortRay, -shortRay, shortRay, shortRay);
+      line(-shortRay, shortRay, shortRay, -shortRay);
+      pop();
+    }
+  }
+
   drawClickRipples() {
     noFill();
     strokeWeight(1.5);
@@ -306,6 +542,9 @@ class InputController {
     colorMode(RGB, 255, 255, 255, 255);
     this.drawField(pointer, now);
     this.drawClickRipples();
+    this.drawStarFlares();
+    this.drawSparks(this.lastDt || 0.016);
+    this.drawMixGlow(states);
     for (let glow of this.glows) {
       const state = states[glow.id];
       if (state) {
