@@ -15,8 +15,8 @@
 // teammates' data.
 //
 // AI acknowledgement: Claude (Anthropic) helped to write these header comments,
-// the comments on techniques from outside the course, getActivity() and the
-// onNewCycle event during final integration. All changes were reviewed and tested by Yuan.
+// the comments on techniques from outside the course, getActivity(), the
+// onNewCycle event and the drawCycleFlash() "big bang" during final integration. All changes were reviewed and tested by Yuan.
 // =============================================================================
 
 class Timer {
@@ -265,8 +265,12 @@ class TimeController {
   // universe is about to be born, then starts the next cycle.
   onCycleComplete() {
     this.cycleCount++;
+    // Event: a new universe begins — start the "big bang" flash (drawn by drawCycleFlash()).
+    this.cycleFlashStart = millis();
     if (this.onNewCycle) {
       const nextCircles = this.onNewCycle(this.cycleCount);
+      // Array.isArray() checks the event really returned a list of circles (outside the course):
+      // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/isArray
       if (Array.isArray(nextCircles)) {
         this.circles = nextCircles;
       }
@@ -311,6 +315,8 @@ class TimeController {
   getColour(circle) {
     // Preserve the crescent's original blue layers rather than rotating their hue.
     if (circle.id === "main") {
+      // lerpColor() blends two colours, like lerp() from Week 11 but for colours:
+      // https://p5js.org/reference/p5/lerpColor/
       return lerpColor(this.coldColour, color(circle.baseColour), this.birthLife(circle.id));
     }
     let shifted = this.shiftCache[circle.id];
@@ -374,6 +380,34 @@ class TimeController {
   }
 
   // Toggled with the D key in sketch.js — useful when presenting the phases.
+  // "Big bang": when a new cycle begins, a bright ring bursts out of the crescent and
+  // a soft white flash fills the sky for a moment, so the change of universe is visible.
+  // Called every frame by sketch.js with the crescent's position; draws nothing otherwise.
+  drawCycleFlash(x, y) {
+    if (this.cycleFlashStart === undefined) {
+      return;
+    }
+    const duration = 2200; // milliseconds
+    const progress = (millis() - this.cycleFlashStart) / duration;
+    if (progress >= 1) {
+      return;
+    }
+    const fade = 1 - progress;
+    const eased = this.easeInOut(progress);
+    push();
+    colorMode(RGB, 255, 255, 255, 255);
+    noStroke();
+    fill(235, 240, 255, 70 * fade * fade); // brief flash over the whole sky
+    rect(0, 0, width, height);
+    noFill();
+    for (let ring = 0; ring < 3; ring++) {
+      stroke(225, 235, 255, 200 * fade);
+      strokeWeight(6 - ring * 2);
+      circle(x, y, 440 + eased * (900 + ring * 160));
+    }
+    pop();
+  }
+
   toggleDebug() {
     this.showDebug = !this.showDebug;
   }
