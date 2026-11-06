@@ -22,6 +22,7 @@
 //                          Perlin builds a new random variation ("Universe No. X").
 //   Input → Time         : clicking empty space sends a gravity wave and plants
 //                          a new star, which Time then lets be born and fade.
+//   Input → colour       : circles pushed into each other by gravity mix colours.
 //
 // Canvas size: the piece is drawn in a fixed 960 × 680 "design space" and
 // style.css scales the canvas to fit the browser window. We chose this so the
@@ -30,7 +31,8 @@
 //
 // AI acknowledgement: Claude (Anthropic) helped to write the integration code in
 // this file (the per-frame pipeline, the intro screen, planting stars, the
-// onNewCycle link and these comments). Reviewed and tested by the group.
+// onNewCycle link, the painted background, the big-bang flash and these comments).
+// Reviewed and tested by the group.
 // References:
 // https://p5js.org/reference/p5/millis/
 // https://p5js.org/reference/p5/deltaTime/
@@ -49,10 +51,11 @@ let inputController;
 let renderStates = {};   // id -> final { x, y, radius, alpha, colour, halo } for this frame.
 let plantedIds = [];     // ids of stars planted by the viewer, oldest first.
 let started = false;     // false while the intro screen is showing.
+let backgroundLayer = null; // Perlin's painted, cloudy ground (rebuilt for every universe).
 
 function setup() {
   createCanvas(DESIGN_WIDTH, DESIGN_HEIGHT);
-  pixelDensity(1);
+  pixelDensity(1); // one canvas pixel per screen pixel, so retina screens stay fast: https://p5js.org/reference/p5/pixelDensity/
   colorMode(RGB, 255, 255, 255, 255);
   noStroke();
 
@@ -77,6 +80,11 @@ function draw() {
   if (!started) {
     drawIntro();
     return;
+  }
+
+  // Perlin's cloudy ground sits on top of Time's phase colour.
+  if (backgroundLayer) {
+    image(backgroundLayer, 0, 0);
   }
 
   const now = millis();
@@ -115,6 +123,15 @@ function draw() {
     };
 
     renderStates[c.id] = state;
+  }
+
+  // Input → colour: circles that gravity pushed into each other mix their colours.
+  // Positions must all be known first, so drawing happens in a second loop.
+  inputController.updateCollisions(circles, renderStates, dt);
+  for (const c of circles) {
+    const state = renderStates[c.id];
+    state.colour = inputController.getMixedColour(c.id, state.colour);
+    state.halo = Math.max(state.halo, inputController.getMixAmount(c.id)); // mixing circles glow
     drawCircle(c, state, now);
   }
 
@@ -126,6 +143,13 @@ function draw() {
   push();
   inputController.drawCursor(pointer, now, renderStates);
   pop();
+
+  // Time → the "big bang" flash from the crescent when a new universe begins.
+  for (const c of circles) {
+    if (c.id === "main") {
+      timeController.drawCycleFlash(c.baseX, c.baseY);
+    }
+  }
 
   drawUniverseLabel();
   timeController.drawDebugPanel(); // Hidden until the viewer presses D.
@@ -142,6 +166,7 @@ function drawCircle(c, state, now) {
 
   // Three translucent layers make a soft halo.
   for (let layer = 3; layer >= 1; layer--) {
+    // red() / green() / blue() read one channel of a p5 colour: https://p5js.org/reference/p5/red/
     fill(red(state.colour), green(state.colour), blue(state.colour),
          state.alpha * state.halo * 0.05);
     circle(state.x, state.y, state.radius * 2 * (1 + layer * 0.08));
@@ -158,6 +183,7 @@ function drawCircle(c, state, now) {
 // Planted stars belong to the old universe, so they are not carried over.
 function startNewVariation() {
   circles = perlinController.newVariation();
+  backgroundLayer = perlinController.makeBackground(circles);
   plantedIds = [];
   return circles;
 }
@@ -173,7 +199,7 @@ function plantStar(x, y) {
   // Keep at most MAX_PLANTED_STARS: remove the oldest one.
   // splice() changes the same array, so Time keeps seeing the current circles.
   if (plantedIds.length > MAX_PLANTED_STARS) {
-    const oldestId = plantedIds.shift();
+    const oldestId = plantedIds.shift(); // shift() removes and returns the first (oldest) item of an array
     for (let i = 0; i < circles.length; i++) {
       if (circles[i].id === oldestId) {
         circles.splice(i, 1);
@@ -187,6 +213,7 @@ function plantStar(x, y) {
 // the first click starts the universe's first cycle and the music together.
 function startExperience() {
   started = true;
+  backgroundLayer = perlinController.makeBackground(circles);
   timeController.reset(circles);
   audioController.start();
 }
@@ -248,7 +275,7 @@ function getPointer() {
     x: mouseX,
     y: mouseY,
     inside: mouseX >= 0 && mouseX < width && mouseY >= 0 && mouseY < height,
-    pressed: mouseIsPressed
+    pressed: mouseIsPressed // true while a mouse button is held: https://p5js.org/reference/p5/mouseIsPressed/
   };
 }
 
@@ -278,6 +305,8 @@ function mouseReleased() {
 
 function keyPressed(event) {
   // Do not take over keys while the viewer is typing or using a button.
+  // includes() checks whether a value is in a list (outside the course):
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/includes
   if (event && event.target && ["INPUT", "TEXTAREA", "BUTTON"].includes(event.target.tagName)) {
     return;
   }
