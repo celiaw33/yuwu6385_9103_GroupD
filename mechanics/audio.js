@@ -13,7 +13,8 @@
 // Each function below is labelled "Human-written" or "AI-assisted".
 // AI acknowledgement: AI assistance is listed in the README. In the final
 // integration round Claude (Anthropic) also helped to add the `activity` link
-// with the Time mechanic, the start() function for the intro screen, and comments
+// with the Time mechanic, the start() function for the intro screen, the bass aura,
+// the stronger ripples, and comments
 // on techniques from outside the course. Reviewed and tested by Lunette.
 // =============================================================================
 
@@ -105,6 +106,8 @@ class AudioController {
       this.playButton.removeAttribute("disabled");
       // Move keyboard focus off the button, otherwise pressing Space (attract/repel)
       // would "click" the button again and pause the music.
+      // .elt is the button's HTML element; blur() removes keyboard focus from it:
+      // https://p5js.org/reference/p5.Element/elt/ · https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/blur
       this.playButton.elt.blur();
     }
   }
@@ -200,6 +203,23 @@ class AudioController {
       this.drawSatellites(c, state, band, now);
     }
 
+    // Bass aura: every large circle gets a soft glowing ring that swells with the bass.
+    const bassGlow = constrain((this.energy.bass - 90) / 165, 0, 1);
+    if (bassGlow > 0) {
+      noFill();
+      for (let c of circleList) {
+        const state = renderStates[c.id];
+        if (state && state.alpha > 0 && this.getBand(c.baseRadius) === "bass") {
+          for (let ring = 1; ring <= 3; ring++) {
+            strokeWeight(ring * 3);
+            stroke(red(state.colour), green(state.colour), blue(state.colour),
+                   state.alpha * bassGlow * 0.12);
+            circle(state.x, state.y, state.radius * 2 + 10 + ring * 8);
+          }
+        }
+      }
+    }
+
     let remainingRipples = [];
     for (let ripple of this.ripples) {
       ripple.age += seconds;
@@ -214,13 +234,15 @@ class AudioController {
   }
 
   // Human-written: Draw expanding ripple rings that slowly fade away over time.
+  // Final round: thicker, brighter rings (stronger beats = thicker lines) so the
+  // music is easier to see from across the room.
   drawRipple(ripple, state) {
     const fade = 1 - ripple.age / ripple.lifetime;
     noFill();
-    strokeWeight(0.8);
+    strokeWeight(1 + 2 * ripple.strength * fade);
     for (let ring = 0; ring < 2; ring++) {
       stroke(red(state.colour), green(state.colour), blue(state.colour),
-             state.alpha * fade * ripple.strength * 0.5);
+             state.alpha * fade * ripple.strength * 0.9);
       const radius = state.radius + ripple.age * 65 + ring * 7;
       circle(state.x, state.y, radius * 2);
     }
